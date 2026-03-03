@@ -751,7 +751,7 @@ function Print-NextSteps {
     Blank
     Write-Host "  $BOLD$GREEN+=========================================================+"
     Write-Host "  |                                                         |"
-    Write-Host "  |   You're all set up! Welcome to the dev life.          |"
+    Write-Host "  |   You're all set up! Get started with Developing.       |"
     Write-Host "  |                                                         |"
     Write-Host "  +=========================================================+$RESET"
     Blank
