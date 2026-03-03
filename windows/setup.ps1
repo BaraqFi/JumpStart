@@ -69,16 +69,52 @@ $LogFile = "$env:USERPROFILE\jumpstart-install.log"
 
 # ─────────────────────────────────────────────
 # COLORS
+# Enable ANSI/VT sequences on Windows PowerShell 5.1.
+# PS 5.1 on older Windows builds has VT support but it's off by default —
+# we turn it on via the console API. If that fails (very old build), we
+# fall back to empty strings so output is plain but functional.
 # ─────────────────────────────────────────────
-$ESC    = [char]27
-$RESET  = "$ESC[0m"
-$BOLD   = "$ESC[1m"
-$DIM    = "$ESC[2m"
-$CYAN   = "$ESC[36m"
-$GREEN  = "$ESC[32m"
-$YELLOW = "$ESC[33m"
-$RED    = "$ESC[31m"
-$WHITE  = "$ESC[37m"
+$script:AnsiEnabled = $false
+try {
+    # Only needed on Windows PowerShell 5.x — PS 7+ enables VT automatically
+    if ($PSVersionTable.PSVersion.Major -lt 6) {
+        $stdout = [System.Console]::OpenStandardOutput()
+        $handle = (Get-Process -Id $PID).MainWindowHandle
+        # Use kernel32 to enable ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x0004)
+        $kernel32 = Add-Type -MemberDefinition @'
+            [DllImport("kernel32.dll", SetLastError=true)]
+            public static extern bool GetConsoleMode(IntPtr handle, out uint mode);
+            [DllImport("kernel32.dll", SetLastError=true)]
+            public static extern bool SetConsoleMode(IntPtr handle, uint mode);
+            [DllImport("kernel32.dll", SetLastError=true)]
+            public static extern IntPtr GetStdHandle(int nStdHandle);
+'@ -Name 'Kernel32' -Namespace 'Win32' -PassThru
+        $hOut = [Win32.Kernel32]::GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        $mode = 0
+        [void][Win32.Kernel32]::GetConsoleMode($hOut, [ref]$mode)
+        [void][Win32.Kernel32]::SetConsoleMode($hOut, ($mode -bor 0x0004))
+        $script:AnsiEnabled = $true
+    } else {
+        $script:AnsiEnabled = $true
+    }
+} catch {
+    $script:AnsiEnabled = $false
+}
+
+if ($script:AnsiEnabled) {
+    $ESC    = [char]27
+    $RESET  = "$ESC[0m"
+    $BOLD   = "$ESC[1m"
+    $DIM    = "$ESC[2m"
+    $CYAN   = "$ESC[36m"
+    $GREEN  = "$ESC[32m"
+    $YELLOW = "$ESC[33m"
+    $RED    = "$ESC[31m"
+    $WHITE  = "$ESC[37m"
+} else {
+    # Plain-text fallback — no colors, but everything still works
+    $ESC = $RESET = $BOLD = $DIM = $CYAN = $GREEN = $YELLOW = $RED = $WHITE = ""
+}
 
 # ─────────────────────────────────────────────
 # PROGRESS TRACKING
@@ -165,7 +201,7 @@ function Winget-Install($id, $label) {
     } else {
         Write-Host "  $CYAN->$RESET $pct Installing $label..."
         Write-Log "INFO: Installing $label"
-        winget install --id $id --silent --accept-package-agreements --accept-source-agreements
+        winget install --id $id --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
         if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {
             Success "$label installed"
         } else {
@@ -854,12 +890,17 @@ function Install-Linux {
             dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
             dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
             wsl --set-default-version 2 2>$null
-            wsl --install -d Ubuntu
+
+            # Use --no-launch so WSL registers Ubuntu without taking over the terminal.
+            # The interactive first-run setup (username/password) will happen when the
+            # user opens Ubuntu from the Start menu after restarting — which is the
+            # correct flow anyway.
+            wsl --install -d Ubuntu --no-launch
             $script:RestartRequired = $true
-            Success "WSL2 + Ubuntu install initiated - restart required to finish"
+            Success "WSL2 + Ubuntu registered - a restart is needed to finish setup"
         } catch {
             Warn "WSL2 install encountered an issue: $_"
-            Warn "Try manually: open PowerShell as Admin and run: wsl --install -d Ubuntu"
+            Warn "Try manually: open PowerShell as Admin and run: wsl --install -d Ubuntu --no-launch"
         }
     }
 
