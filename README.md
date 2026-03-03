@@ -41,22 +41,44 @@ irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 |
 
 ## 📦 What Gets Installed
 
-Run the interactive menu to choose, or pass flags to go straight to install:
+Run the interactive menu to choose, or pass flags to go straight to install.
+
+> **Key:** no tag = works the same on both platforms · `[macOS]` = macOS only · `[Windows]` = Windows only
 
 | Category | What's included | Flag |
 |---|---|---|
-| **Essentials** | Git, VS Code, Homebrew | `--essentials` |
-| **Web Dev** | Node.js (via nvm), pnpm, Docker Desktop, Postman | `--web` |
-| **Python** | Python 3 (via pyenv), pipx | `--python` |
+| **Essentials** | Git, VS Code | `--essentials` |
+| | + Homebrew `[macOS]` | |
+| | + Windows Terminal, Git Bash `[Windows]` | |
+| **Web Dev** | Node.js, pnpm, Docker Desktop, Postman | `--web` |
+| | installed via nvm + Homebrew `[macOS]` | |
+| | installed via nvm-windows + winget `[Windows]` | |
+| **Python** | Python 3, pipx | `--python` |
+| | installed via pyenv `[macOS]` | |
+| | installed via pyenv-win `[Windows]` | |
 | **Productivity** | Starship prompt, bat, eza, fzf, GitHub CLI, Nerd Fonts | `--productivity` |
-| **AI CLI Tools** | Gemini CLI, Claude Code | `--ai` |
+| | installed via Homebrew `[macOS]` | |
+| | installed via winget + Chocolatey `[Windows]` | |
+| **AI CLI Tools** | Gemini CLI (Google), Claude Code (Anthropic) | `--ai` |
+| **Linux on Windows** `[Windows]` | WSL2 + Ubuntu, Chocolatey | `--linux` |
+| | *Gives you bash, grep, ls and all unix commands on Windows* | |
+| | *⚠ Requires a restart to complete WSL2 setup* | |
 
-### Install everything at once:
+### Install everything at once
+
+macOS:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash -s -- --all
 ```
 
-### Mix and match:
+Windows:
+```powershell
+$env:JS_FLAGS="--all"; irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex
+```
+
+### Mix and match
+
+macOS:
 ```bash
 # Web dev + AI tools only
 curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash -s -- --web --ai
@@ -65,9 +87,22 @@ curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh
 curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash -s -- --essentials
 ```
 
-### Preview without installing:
+Windows:
+```powershell
+# Web dev + Linux on Windows
+$env:JS_FLAGS="--web --linux"; irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex
+```
+
+### Preview without installing
+
+macOS:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash -s -- --dry-run
+```
+
+Windows:
+```powershell
+$env:JS_FLAGS="--dry-run"; irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex
 ```
 
 ---
@@ -141,11 +176,12 @@ Full install log is saved to `~/jumpstart-install.log`.
 
 ## 🗺️ Roadmap
 
-- [x] macOS script (v1)
-- [ ] Windows PowerShell script (v1)
+- [x] macOS script (v1) — Homebrew, nvm, pyenv, Starship, AI CLI tools
+- [x] Windows script (v1) — winget, nvm-windows, pyenv-win, WSL2, Chocolatey
 - [ ] Web configurator with GUI (GUI → generates your custom command)
 - [ ] More tool categories (mobile, game dev, DevOps)
 - [ ] Config file support (`jumpstart.yaml`)
+- [ ] Version pinning for reproducible setups
 
 ---
 

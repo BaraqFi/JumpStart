@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs — JumpStart</title>
+  <meta name="description" content="JumpStart documentation — flags, categories, AI key setup, WSL2, customisation." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">JumpStart</span>
+        <span class="logo-version">v1.0.0</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">~/</a>
+        <a href="configure.html" class="nav-link">configure</a>
+        <a href="docs.html" class="nav-link active">docs</a>
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank" class="nav-link nav-link-external">github ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container page-top docs-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="docs-sidebar">
+      <p class="section-label" style="margin-bottom:1rem"><span class="comment-slash">// </span>contents</p>
+      <nav class="toc">
+        <a href="#quick-start" class="toc-link">Quick Start</a>
+        <a href="#flags" class="toc-link">All Flags</a>
+        <a href="#categories" class="toc-link">Categories</a>
+        <a href="#ai-tools" class="toc-link">AI Tools & Keys</a>
+        <a href="#wsl" class="toc-link">WSL2 Setup</a>
+        <a href="#security" class="toc-link">Security & Safety</a>
+        <a href="#customize" class="toc-link">Customising JumpStart</a>
+      </nav>
+      <div class="sidebar-version">
+        <p class="section-label" style="margin-bottom:0.5rem">version</p>
+        <p class="version-num">v1.0.0</p>
+        <a href="https://github.com/baraqfi/jumpstart/blob/main/CHANGELOG.md" target="_blank" class="changelog-link">view changelog →</a>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="docs-main">
+
+      <div class="page-header">
+        <p class="section-label"><span class="comment-slash">// </span>documentation</p>
+        <h1 class="page-title">JumpStart Docs</h1>
+        <p class="page-sub">Everything you need to install, customise and extend JumpStart.</p>
+      </div>
+
+      <!-- QUICK START -->
+      <section id="quick-start" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>Quick Start</h2>
+        <p class="doc-p">Open your terminal and run one of the commands below. The interactive menu will guide you through the rest.</p>
+
+        <p class="code-label">macOS — open Terminal (Cmd+Space → type Terminal → Enter)</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">bash</span>
+            <button class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash">copy</button>
+          </div>
+          <pre>curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash</pre>
+        </div>
+
+        <p class="code-label" style="margin-top:1.25rem">Windows — open PowerShell as Administrator (Start → PowerShell → right-click → Run as Administrator)</p>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-lang">powershell</span>
+            <button class="copy-btn" data-copy="irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex">copy</button>
+          </div>
+          <pre>irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex</pre>
+        </div>
+
+        <div class="doc-note doc-note-warn">
+          <strong>Windows tip:</strong> Right-click PowerShell in the Start menu and choose "Run as Administrator" for best results. Docker and WSL2 require it.
+        </div>
+      </section>
+
+      <!-- FLAGS -->
+      <section id="flags" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>All Flags</h2>
+        <p class="doc-p">Pass flags to skip the interactive menu and install specific categories directly.</p>
+
+        <div class="flags-table-wrap">
+          <table class="flags-table">
+            <thead><tr><th>Flag</th><th>What it installs</th></tr></thead>
+            <tbody>
+              <tr><td><code class="flag">--essentials</code></td><td>Git, VS Code + Homebrew [mac] / Windows Terminal, Git Bash [win]</td></tr>
+              <tr><td><code class="flag">--web</code></td><td>Node.js via nvm, pnpm, Docker Desktop, Postman</td></tr>
+              <tr><td><code class="flag">--python</code></td><td>Python 3 via pyenv / pyenv-win, pipx</td></tr>
+              <tr><td><code class="flag">--productivity</code></td><td>Starship, bat, eza, fzf, GitHub CLI, Nerd Fonts</td></tr>
+              <tr><td><code class="flag">--ai</code></td><td>Gemini CLI, Claude Code (API keys not included)</td></tr>
+              <tr><td><code class="flag">--linux</code></td><td>WSL2 + Ubuntu, Chocolatey — <span class="tag-win">Windows only</span></td></tr>
+              <tr><td><code class="flag">--all</code></td><td>Install everything above</td></tr>
+              <tr><td><code class="flag">--dry-run</code></td><td>Preview what would be installed without doing it</td></tr>
+              <tr><td><code class="flag">--help</code></td><td>Show help screen in terminal</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="code-label" style="margin-top:1.5rem">macOS — combine flags:</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span>
+            <button class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash -s -- --web --python --ai">copy</button>
+          </div>
+          <pre>curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash -s -- --web --python --ai</pre>
+        </div>
+
+        <p class="code-label" style="margin-top:1.25rem">Windows — use $env:JS_FLAGS:</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span>
+            <button class="copy-btn" data-copy='$env:JS_FLAGS="--web --python --ai"&#10;irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex'>copy</button>
+          </div>
+          <pre>$env:JS_FLAGS="--web --python --ai"
+irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex</pre>
+        </div>
+      </section>
+
+      <!-- CATEGORIES -->
+      <section id="categories" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>Categories</h2>
+        <p class="doc-p">Each category installs a focused set of tools. Platform-specific items are tagged.</p>
+
+        <div class="doc-cats">
+
+          <div class="doc-cat-card">
+            <div class="doc-cat-header">
+              <span class="doc-cat-name">Essentials</span>
+              <code class="flag">--essentials</code>
+            </div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Git</b> — Version control. Non-negotiable.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>VS Code</b> — The editor everyone starts with.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Homebrew</b> — The macOS package manager. <span class="tag-mac">macOS</span></div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Windows Terminal</b> — Modern terminal. Replaces cmd. <span class="tag-win">Windows</span></div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Git Bash</b> — Bash shell on Windows. Comes with Git. <span class="tag-win">Windows</span></div>
+          </div>
+
+          <div class="doc-cat-card">
+            <div class="doc-cat-header">
+              <span class="doc-cat-name">Web Development</span>
+              <code class="flag">--web</code>
+            </div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Node.js LTS</b> — JavaScript runtime. Via nvm / nvm-windows.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>pnpm</b> — Faster, disk-efficient npm alternative.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Docker Desktop</b> — Containerise anything. Run anything.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Postman</b> — Test and explore APIs with a clean UI.</div>
+          </div>
+
+          <div class="doc-cat-card">
+            <div class="doc-cat-header">
+              <span class="doc-cat-name">Python</span>
+              <code class="flag">--python</code>
+            </div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>pyenv / pyenv-win</b> — Switch Python versions without pain.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Python 3.12</b> — Latest stable, set as global default.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>pipx</b> — Run Python CLI tools in isolated environments.</div>
+          </div>
+
+          <div class="doc-cat-card">
+            <div class="doc-cat-header">
+              <span class="doc-cat-name">Productivity Tools</span>
+              <code class="flag">--productivity</code>
+            </div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Starship</b> — Cross-shell prompt. Fast. Informative. Beautiful.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>JetBrains Mono NF</b> — Nerd Font required for Starship icons.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>bat</b> — cat with syntax highlighting.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>eza</b> — ls with colors, icons and git status.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>fzf</b> — Fuzzy finder. Press Ctrl+R and watch the magic.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>GitHub CLI</b> — PRs, repos, issues — all from the terminal.</div>
+          </div>
+
+          <div class="doc-cat-card">
+            <div class="doc-cat-header">
+              <span class="doc-cat-name">AI CLI Tools</span>
+              <code class="flag">--ai</code>
+            </div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Gemini CLI</b> — Google's AI in your terminal. Free tier available.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Claude Code</b> — Anthropic's coding agent. Understands your codebase.</div>
+          </div>
+
+          <div class="doc-cat-card">
+            <div class="doc-cat-header">
+              <span class="doc-cat-name">Linux on Windows</span>
+              <code class="flag">--linux</code>
+              <span class="tag-win">Windows only</span>
+            </div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>WSL2 + Ubuntu</b> — Full Linux shell inside Windows. No dual boot needed.</div>
+            <div class="doc-pkg"><span class="pkg-arrow">▸</span> <b>Chocolatey</b> — Wider package manager. Complements winget.</div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- AI TOOLS -->
+      <section id="ai-tools" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>AI Tools & API Keys</h2>
+        <p class="doc-p">JumpStart installs the tools but <span class="text-green">never handles your API keys</span>. They stay on your machine only.</p>
+
+        <div class="doc-cat-card" style="margin-bottom:1rem">
+          <div class="doc-cat-header"><span class="doc-cat-name">Gemini CLI</span><span class="badge-free">free tier</span></div>
+          <ol class="doc-ol">
+            <li>Visit <a href="https://aistudio.google.com/apikey" target="_blank" class="link-cyan">aistudio.google.com/apikey</a></li>
+            <li>Sign in with your Google account</li>
+            <li>Click <strong>"Create API Key"</strong> and copy it</li>
+            <li>Run <code class="inline-code">gemini</code> in your terminal — it will prompt for your key</li>
+          </ol>
+        </div>
+
+        <div class="doc-cat-card">
+          <div class="doc-cat-header"><span class="doc-cat-name">Claude Code</span></div>
+          <ol class="doc-ol">
+            <li>Visit <a href="https://console.anthropic.com" target="_blank" class="link-cyan">console.anthropic.com</a></li>
+            <li>Create an account and go to <strong>"API Keys"</strong></li>
+            <li>Click <strong>"Create Key"</strong> and copy it</li>
+            <li>Run <code class="inline-code">claude</code> in your terminal — it will prompt for your key</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- WSL -->
+      <section id="wsl" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>WSL2 Setup <span class="tag-win">Windows only</span></h2>
+        <p class="doc-p">WSL2 (Windows Subsystem for Linux) gives you a full bash/Linux environment inside Windows. No dual boot, no virtual machine hassle.</p>
+
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span>
+            <button class="copy-btn" data-copy='$env:JS_FLAGS="--linux"&#10;irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex'>copy</button>
+          </div>
+          <pre>$env:JS_FLAGS="--linux"
+irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex</pre>
+        </div>
+
+        <div class="doc-note doc-note-warn" style="margin-top:1rem">
+          <strong>⚠ A restart is required after WSL2 installs.</strong><br><br>
+          After restarting:<br>
+          1. Open <strong>"Ubuntu"</strong> from the Start menu<br>
+          2. Create a Linux username and password when prompted<br>
+          3. Run <code class="inline-code">sudo apt update && sudo apt upgrade</code><br>
+          4. You now have bash, grep, ls, curl and all unix commands available
+        </div>
+      </section>
+
+      <!-- SECURITY -->
+      <section id="security" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>Security & Safety</h2>
+        <p class="doc-p"><code class="inline-code">curl | bash</code> is a pattern that security-conscious developers rightly question. Here's what you should know:</p>
+
+        <div class="doc-checks">
+          <div class="doc-check"><span class="check-icon">✓</span> JumpStart is fully open source — every line is readable on GitHub</div>
+          <div class="doc-check"><span class="check-icon">✓</span> Only installs well-known tools from official sources (Homebrew, winget, npm)</div>
+          <div class="doc-check"><span class="check-icon">✓</span> Never collects data, sends telemetry, or touches your API keys</div>
+          <div class="doc-check"><span class="check-icon">✓</span> Checks before installing — safe to re-run without breaking anything</div>
+          <div class="doc-check"><span class="check-icon">✓</span> Writes a full log to ~/jumpstart-install.log for transparency</div>
+        </div>
+
+        <p class="code-label" style="margin-top:1.25rem">Want to inspect before running?</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span>
+            <button class="copy-btn" data-copy="curl -o setup.sh https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh&#10;cat setup.sh&#10;bash setup.sh">copy</button>
+          </div>
+          <pre># macOS
+curl -o setup.sh https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh
+cat setup.sh    # read it
+bash setup.sh   # run when satisfied</pre>
+        </div>
+      </section>
+
+      <!-- CUSTOMIZE -->
+      <section id="customize" class="doc-section">
+        <h2 class="doc-h2"><span class="comment-slash">// </span>Customising JumpStart</h2>
+        <p class="doc-p">JumpStart is designed to be forked and customised. Package lists are simple arrays — adding a tool is one line.</p>
+
+        <p class="code-label">macOS — add a Homebrew package:</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span></div>
+          <pre># In mac/setup.sh, find the relevant section and add:
+brew_install your-tool "Your Tool Name"
+# or for GUI apps:
+brew_cask_install your-app "Your App Name"</pre>
+        </div>
+
+        <p class="code-label" style="margin-top:1.25rem">Windows — add a winget package:</p>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span></div>
+          <pre>Winget-Install 'Publisher.PackageId' 'Your Tool Name'</pre>
+        </div>
+
+        <div class="doc-note" style="margin-top:1.25rem">
+          <span class="comment-slash"># </span><strong>Coming in v1.1 — module system</strong><br><br>
+          <code class="inline-code">curl ... | bash -s -- --web --module blockchain</code><br><br>
+          Planned modules: <strong>blockchain</strong> (Foundry, Anvil, Hardhat, ethers.js, Solana CLI),
+          <strong>mobile</strong> (React Native, Flutter), <strong>data</strong> (Jupyter, pandas),
+          <strong>devops</strong> (Terraform, kubectl, AWS CLI)
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>⚡ JumpStart v1.0.0 — MIT License</span>
+      <div class="footer-links">
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank">github</a>
+        <a href="https://github.com/baraqfi/jumpstart/issues" target="_blank">report an issue</a>
+        <a href="https://github.com/baraqfi/jumpstart/blob/main/CHANGELOG.md" target="_blank">changelog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

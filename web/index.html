@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JumpStart — Dev Setup in Minutes</title>
+  <meta name="description" content="Go from fresh Mac or Windows install to productive dev environment in ~15 minutes. Open source, beginner friendly." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">JumpStart</span>
+        <span class="logo-version">v1.0.0</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link active">~/</a>
+        <a href="configure.html" class="nav-link">configure</a>
+        <a href="docs.html" class="nav-link">docs</a>
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank" class="nav-link nav-link-external">github ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+
+      <pre class="ascii-logo" aria-hidden="true">
+  ██╗██╗   ██╗███╗   ███╗██████╗ ███████╗████████╗ █████╗ ██████╗ ████████╗
+  ██║██║   ██║████╗ ████║██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔══██╗╚══██╔══╝
+  ██║██║   ██║██╔████╔██║██████╔╝███████╗   ██║   ███████║██████╔╝   ██║
+  ██║██║   ██║██║╚██╔╝██║██╔═══╝ ╚════██║   ██║   ██╔══██║██╔══██╗   ██║
+  ██║╚██████╔╝██║ ╚═╝ ██║██║     ███████║   ██║   ██║  ██║██║  ██║   ██║
+  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝</pre>
+
+      <div class="hero-mobile-title">⚡ JUMPSTART</div>
+
+      <p class="hero-tagline">
+        Fresh machine → productive dev setup.<span class="cursor">█</span>
+      </p>
+      <p class="hero-sub">
+        One command installs everything a developer needs — Git, Node, Python, Docker,
+        AI CLI tools and more. macOS and Windows. Beginner friendly. Open source.
+      </p>
+
+      <div class="hero-ctas">
+        <a href="configure.html" class="btn btn-primary">▸ open configurator</a>
+        <a href="docs.html" class="btn btn-outline">read the docs</a>
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank" class="btn btn-ghost">★ github</a>
+      </div>
+
+      <!-- ONE-LINERS -->
+      <p class="divider-label">— or paste directly into your terminal —</p>
+
+      <div class="cmd-blocks">
+        <div class="cmd-block">
+          <div class="cmd-header">
+            <div class="cmd-platform">
+              <span>🍎</span>
+              <span class="cmd-platform-label">macOS</span>
+              <span class="cmd-hint">open Terminal → Cmd+Space, type Terminal</span>
+            </div>
+            <button class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash">copy</button>
+          </div>
+          <div class="cmd-body">
+            <span class="prompt">$</span>
+            <code>curl -fsSL https://raw.githubusercontent.com/baraqfi/jumpstart/main/mac/setup.sh | bash</code>
+          </div>
+        </div>
+
+        <div class="cmd-block">
+          <div class="cmd-header">
+            <div class="cmd-platform">
+              <span>🪟</span>
+              <span class="cmd-platform-label">Windows</span>
+              <span class="cmd-tag-warn">run as Administrator</span>
+            </div>
+            <button class="copy-btn" data-copy="irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex">copy</button>
+          </div>
+          <div class="cmd-body">
+            <span class="prompt">PS&gt;</span>
+            <code>irm https://raw.githubusercontent.com/baraqfi/jumpstart/main/windows/setup.ps1 | iex</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section border-top">
+    <div class="container">
+      <p class="section-label"><span class="comment-slash">// </span>why jumpstart</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <div class="feature-title">One command</div>
+          <div class="feature-desc">Paste. Run. Done. No manual steps, no hunting for docs.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎛️</div>
+          <div class="feature-title">Your choice</div>
+          <div class="feature-desc">Pick only what you need from an interactive menu or the web configurator.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <div class="feature-title">Safe to re-run</div>
+          <div class="feature-desc">Checks before installing. Run it again anytime without breaking anything.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <div class="feature-title">AI tools included</div>
+          <div class="feature-desc">Gemini CLI and Claude Code — ready to try. Bring your own API key.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🐧</div>
+          <div class="feature-title">Linux on Windows</div>
+          <div class="feature-desc">WSL2 + Ubuntu for bash commands on Windows. No dual boot needed.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📖</div>
+          <div class="feature-title">Open source</div>
+          <div class="feature-desc">MIT licensed. Fork it, customise it, share it with your team.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT'S INCLUDED -->
+  <section class="section border-top">
+    <div class="container">
+      <p class="section-label"><span class="comment-slash">// </span>what's included</p>
+      <p class="section-sub">
+        Choose categories in the <a href="configure.html" class="link-green">configurator</a> or pass flags directly.
+        <br><span class="tag-key">no tag</span> = both platforms &nbsp;·&nbsp;
+        <span class="tag-mac">macOS</span> = macOS only &nbsp;·&nbsp;
+        <span class="tag-win">Windows</span> = Windows only
+      </p>
+
+      <div class="table-wrap">
+        <table class="pkg-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>What's included</th>
+              <th>Flag</th>
+              <th>Platform</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-cat">Essentials</td>
+              <td>Git, VS Code<br><span class="td-sub">+ Homebrew <span class="tag-mac">macOS</span></span><br><span class="td-sub">+ Windows Terminal, Git Bash <span class="tag-win">Windows</span></span></td>
+              <td><code class="flag">--essentials</code></td>
+              <td class="td-plat">both</td>
+            </tr>
+            <tr>
+              <td class="td-cat">Web Dev</td>
+              <td>Node.js, pnpm, Docker Desktop, Postman<br><span class="td-sub">via nvm / nvm-windows</span></td>
+              <td><code class="flag">--web</code></td>
+              <td class="td-plat">both</td>
+            </tr>
+            <tr>
+              <td class="td-cat">Python</td>
+              <td>Python 3, pipx<br><span class="td-sub">via pyenv / pyenv-win</span></td>
+              <td><code class="flag">--python</code></td>
+              <td class="td-plat">both</td>
+            </tr>
+            <tr>
+              <td class="td-cat">Productivity</td>
+              <td>Starship, bat, eza, fzf, GitHub CLI, Nerd Fonts</td>
+              <td><code class="flag">--productivity</code></td>
+              <td class="td-plat">both</td>
+            </tr>
+            <tr>
+              <td class="td-cat">AI CLI Tools</td>
+              <td>Gemini CLI, Claude Code<br><span class="td-sub">bring your own API key</span></td>
+              <td><code class="flag">--ai</code></td>
+              <td class="td-plat">both</td>
+            </tr>
+            <tr>
+              <td class="td-cat">Linux on Windows</td>
+              <td>WSL2 + Ubuntu, Chocolatey<br><span class="td-sub">⚠ restart required after</span></td>
+              <td><code class="flag">--linux</code></td>
+              <td class="td-plat"><span class="tag-win">Windows</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>⚡ JumpStart v1.0.0 — MIT License</span>
+      <div class="footer-links">
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank">github</a>
+        <a href="https://github.com/baraqfi/jumpstart/issues" target="_blank">report an issue</a>
+        <a href="https://github.com/baraqfi/jumpstart/blob/main/CHANGELOG.md" target="_blank">changelog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

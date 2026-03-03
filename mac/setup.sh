@@ -234,22 +234,26 @@ print_menu() {
   blank
 
   echo -e "  ${BOLD}${GREEN}[1]${RESET} ${BOLD}Essentials${RESET} ${DIM}(recommended)${RESET}"
-  dim "      Git, VS Code, Homebrew"
+  dim "      Git, VS Code"
+  echo -e "      ${DIM}+ Homebrew  ${YELLOW}[macOS only]${RESET}"
   blank
 
   echo -e "  ${BOLD}${GREEN}[2]${RESET} ${BOLD}Web Development${RESET}"
-  dim "      Node.js via nvm, pnpm, Docker Desktop, Postman"
+  dim "      Node.js, pnpm, Docker Desktop, Postman"
+  dim "      installed via nvm + Homebrew"
   blank
 
   echo -e "  ${BOLD}${GREEN}[3]${RESET} ${BOLD}Python${RESET}"
-  dim "      Python 3 via pyenv, pipx"
+  dim "      Python 3, pipx"
+  dim "      installed via pyenv"
   blank
 
   echo -e "  ${BOLD}${GREEN}[4]${RESET} ${BOLD}Productivity Tools${RESET}"
   dim "      Starship prompt, bat, eza, fzf, GitHub CLI, Nerd Fonts"
+  dim "      installed via Homebrew"
   blank
 
-  echo -e "  ${BOLD}${GREEN}[5]${RESET} ${BOLD}AI CLI Tools${RESET} ${DIM}(optional — you'll add your own API keys)${RESET}"
+  echo -e "  ${BOLD}${GREEN}[5]${RESET} ${BOLD}AI CLI Tools${RESET} ${DIM}(you'll add your own API keys after)${RESET}"
   dim "      Gemini CLI (Google), Claude Code (Anthropic)"
   blank
 

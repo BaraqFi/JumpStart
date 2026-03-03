@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configurator — JumpStart</title>
+  <meta name="description" content="Pick your platform and packages. Get your custom install command instantly." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">JumpStart</span>
+        <span class="logo-version">v1.0.0</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">~/</a>
+        <a href="configure.html" class="nav-link active">configure</a>
+        <a href="docs.html" class="nav-link">docs</a>
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank" class="nav-link nav-link-external">github ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container page-top">
+
+    <!-- HEADER -->
+    <div class="page-header">
+      <p class="section-label"><span class="comment-slash">// </span>configurator</p>
+      <h1 class="page-title">Build your install command.</h1>
+      <p class="page-sub">Pick your platform and select what you want. Your command generates live below.</p>
+    </div>
+
+    <!-- PLATFORM TOGGLE + ACTIONS -->
+    <div class="config-toolbar">
+      <div class="platform-toggle" role="group" aria-label="Select platform">
+        <button class="platform-btn active" data-platform="mac" onclick="setPlatform('mac')">🍎 macOS</button>
+        <button class="platform-btn" data-platform="windows" onclick="setPlatform('windows')">🪟 Windows</button>
+      </div>
+      <div class="config-actions">
+        <button class="action-btn" onclick="selectAll()">select all</button>
+        <span class="action-divider">|</span>
+        <button class="action-btn action-btn-red" onclick="clearAll()">clear</button>
+        <span class="action-divider">|</span>
+        <span class="selected-count" id="selectedCount">1 selected</span>
+      </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="config-grid">
+
+      <!-- CATEGORY CARDS -->
+      <div class="cards-col" id="categoryCards">
+
+        <!-- Essentials -->
+        <div class="cat-card selected" data-id="essentials" data-platform="both" onclick="toggleCard(this)">
+          <div class="cat-card-top">
+            <div class="cat-card-info">
+              <div class="cat-card-name-row">
+                <span class="cat-name">Essentials</span>
+                <span class="cat-badge-rec">recommended</span>
+              </div>
+              <p class="cat-tagline">The baseline every developer needs.</p>
+            </div>
+            <div class="cat-checkbox" aria-hidden="true">✓</div>
+          </div>
+          <div class="cat-packages">
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Git</span><span class="pkg-desc">— Version control. Non-negotiable.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">VS Code</span><span class="pkg-desc">— The editor everyone starts with.</span></div>
+            <div class="cat-pkg mac-only"><span class="pkg-arrow">▸</span><span class="pkg-name">Homebrew</span><span class="pkg-desc">— The macOS package manager.</span><span class="tag-mac">macOS</span></div>
+            <div class="cat-pkg win-only"><span class="pkg-arrow">▸</span><span class="pkg-name">Windows Terminal</span><span class="pkg-desc">— Modern terminal for Windows.</span><span class="tag-win">Windows</span></div>
+            <div class="cat-pkg win-only"><span class="pkg-arrow">▸</span><span class="pkg-name">Git Bash</span><span class="pkg-desc">— Bash shell on Windows. Comes with Git.</span><span class="tag-win">Windows</span></div>
+          </div>
+          <code class="cat-flag">--essentials</code>
+        </div>
+
+        <!-- Web Dev -->
+        <div class="cat-card" data-id="web" data-platform="both" onclick="toggleCard(this)">
+          <div class="cat-card-top">
+            <div class="cat-card-info">
+              <div class="cat-card-name-row">
+                <span class="cat-name">Web Development</span>
+              </div>
+              <p class="cat-tagline">Everything to build and ship web apps.</p>
+            </div>
+            <div class="cat-checkbox" aria-hidden="true">✓</div>
+          </div>
+          <div class="cat-packages">
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Node.js LTS</span><span class="pkg-desc">— via nvm / nvm-windows.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">pnpm</span><span class="pkg-desc">— Faster, disk-efficient npm alternative.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Docker Desktop</span><span class="pkg-desc">— Containerise anything.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Postman</span><span class="pkg-desc">— Test and explore APIs.</span></div>
+          </div>
+          <code class="cat-flag">--web</code>
+        </div>
+
+        <!-- Python -->
+        <div class="cat-card" data-id="python" data-platform="both" onclick="toggleCard(this)">
+          <div class="cat-card-top">
+            <div class="cat-card-info">
+              <div class="cat-card-name-row">
+                <span class="cat-name">Python</span>
+              </div>
+              <p class="cat-tagline">Proper Python setup without the version headaches.</p>
+            </div>
+            <div class="cat-checkbox" aria-hidden="true">✓</div>
+          </div>
+          <div class="cat-packages">
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">pyenv / pyenv-win</span><span class="pkg-desc">— Switch Python versions without pain.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Python 3.12</span><span class="pkg-desc">— Latest stable. Set as global default.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">pipx</span><span class="pkg-desc">— Run Python CLI tools in isolation.</span></div>
+          </div>
+          <code class="cat-flag">--python</code>
+        </div>
+
+        <!-- Productivity -->
+        <div class="cat-card" data-id="productivity" data-platform="both" onclick="toggleCard(this)">
+          <div class="cat-card-top">
+            <div class="cat-card-info">
+              <div class="cat-card-name-row">
+                <span class="cat-name">Productivity Tools</span>
+              </div>
+              <p class="cat-tagline">Make your terminal fast, beautiful and smart.</p>
+            </div>
+            <div class="cat-checkbox" aria-hidden="true">✓</div>
+          </div>
+          <div class="cat-packages">
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Starship</span><span class="pkg-desc">— Cross-shell prompt. Fast and beautiful.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">JetBrains Mono NF</span><span class="pkg-desc">— Nerd Font for Starship icons.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">bat</span><span class="pkg-desc">— cat with syntax highlighting.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">eza</span><span class="pkg-desc">— ls, but with colors and git status.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">fzf</span><span class="pkg-desc">— Fuzzy finder. Press Ctrl+R.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">GitHub CLI</span><span class="pkg-desc">— PRs and repos from the terminal.</span></div>
+          </div>
+          <code class="cat-flag">--productivity</code>
+        </div>
+
+        <!-- AI Tools -->
+        <div class="cat-card" data-id="ai" data-platform="both" onclick="toggleCard(this)">
+          <div class="cat-card-top">
+            <div class="cat-card-info">
+              <div class="cat-card-name-row">
+                <span class="cat-name">AI CLI Tools</span>
+                <span class="cat-badge-note">bring your own key</span>
+              </div>
+              <p class="cat-tagline">Code with AI right in your terminal.</p>
+            </div>
+            <div class="cat-checkbox" aria-hidden="true">✓</div>
+          </div>
+          <div class="cat-packages">
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Gemini CLI</span><span class="pkg-desc">— Google's AI. Free tier available.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Claude Code</span><span class="pkg-desc">— Anthropic's coding agent.</span></div>
+          </div>
+          <code class="cat-flag">--ai</code>
+        </div>
+
+        <!-- Linux on Windows -->
+        <div class="cat-card windows-only-card" data-id="linux" data-platform="windows" onclick="toggleCard(this)">
+          <div class="cat-card-top">
+            <div class="cat-card-info">
+              <div class="cat-card-name-row">
+                <span class="cat-name">Linux on Windows</span>
+                <span class="tag-win">Windows only</span>
+              </div>
+              <p class="cat-tagline">Run bash and unix commands natively on Windows.</p>
+            </div>
+            <div class="cat-checkbox" aria-hidden="true">✓</div>
+          </div>
+          <div class="cat-packages">
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">WSL2 + Ubuntu</span><span class="pkg-desc">— Full Linux shell inside Windows.</span></div>
+            <div class="cat-pkg"><span class="pkg-arrow">▸</span><span class="pkg-name">Chocolatey</span><span class="pkg-desc">— Wider package manager for Windows.</span></div>
+          </div>
+          <div class="cat-warn">⚠ Requires a restart to complete WSL2 setup</div>
+          <code class="cat-flag">--linux</code>
+        </div>
+
+      </div><!-- /cards-col -->
+
+      <!-- COMMAND OUTPUT -->
+      <div class="output-col">
+        <p class="section-label" style="margin-bottom: 0.75rem"><span class="comment-slash">// </span>your command</p>
+
+        <div class="terminal-window">
+          <div class="terminal-titlebar">
+            <div class="terminal-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <span class="terminal-title" id="terminalTitle">Terminal</span>
+            <button class="copy-btn" id="copyCommandBtn" onclick="copyCommand()" disabled>copy command</button>
+          </div>
+          <div class="terminal-body" id="terminalBody">
+            <div class="terminal-line">
+              <span class="prompt" id="terminalPrompt">$</span>
+              <span class="terminal-output" id="commandOutput">select categories above to generate your command...</span>
+              <span class="cursor">█</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inspect tip -->
+        <div class="inspect-tip">
+          <span class="comment-slash"># </span>want to inspect before running?<br>
+          <span id="inspectMac">
+            curl -o setup.sh [url]<br>
+            cat setup.sh<br>
+            bash setup.sh
+          </span>
+          <span id="inspectWin" style="display:none">
+            irm [url] -OutFile setup.ps1<br>
+            cat setup.ps1<br>
+            ./setup.ps1
+          </span>
+        </div>
+      </div>
+
+    </div><!-- /config-grid -->
+  </div><!-- /container -->
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>⚡ JumpStart v1.0.0 — MIT License</span>
+      <div class="footer-links">
+        <a href="https://github.com/baraqfi/jumpstart" target="_blank">github</a>
+        <a href="https://github.com/baraqfi/jumpstart/issues" target="_blank">report an issue</a>
+        <a href="https://github.com/baraqfi/jumpstart/blob/main/CHANGELOG.md" target="_blank">changelog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
