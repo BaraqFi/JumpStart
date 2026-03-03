@@ -272,7 +272,7 @@ interactive_menu() {
 
   echo -e "  Enter numbers separated by spaces ${DIM}(e.g. 1 2 5)${RESET}, or ${CYAN}A${RESET} for all:"
   echo -ne "  ${BOLD}→ ${RESET}"
-  read -r input
+  read -r input </dev/tty
 
   blank
 
@@ -327,7 +327,7 @@ print_confirm() {
   echo -e "  ${DIM}You may be asked for your Mac password — this is normal and safe.${RESET}"
   blank
   echo -ne "  ${BOLD}Ready to go? [Y/n]:${RESET} "
-  read -r confirm
+  read -r confirm </dev/tty
 
   if [[ "$confirm" =~ ^[Nn]$ ]]; then
     blank
@@ -383,9 +383,9 @@ install_essentials() {
     blank
     echo -e "  ${BOLD}Let's set up your Git identity:${RESET}"
     echo -ne "  Your name (for Git commits): "
-    read -r git_name
+    read -r git_name </dev/tty
     echo -ne "  Your email (for Git commits): "
-    read -r git_email
+    read -r git_email </dev/tty
     run git config --global user.name "$git_name"
     run git config --global user.email "$git_email"
     run git config --global init.defaultBranch main
