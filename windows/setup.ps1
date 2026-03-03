@@ -81,6 +81,49 @@ $RED    = "$ESC[31m"
 $WHITE  = "$ESC[37m"
 
 # ─────────────────────────────────────────────
+# PROGRESS TRACKING
+# ─────────────────────────────────────────────
+# Step counts per section. Each count = the number of discrete install
+# actions in that section (one per package / named install call).
+#
+#   Essentials   : Git, VS Code, Windows Terminal                        = 3
+#   Web          : nvm-windows, Node.js, pnpm, Docker Desktop, Postman  = 5
+#   Python       : pyenv-win, Python, pipx                              = 3
+#   Productivity : Starship, Nerd Font, bat, eza, fzf, GitHub CLI       = 6
+#   AI           : Gemini CLI, Claude Code                              = 2
+#   Linux        : Chocolatey, WSL2+Ubuntu                              = 2
+$StepCounts = @{
+    Essentials   = 3
+    Web          = 5
+    Python       = 3
+    Productivity = 6
+    AI           = 2
+    Linux        = 2
+}
+
+$script:ProgressTotal   = 0
+$script:ProgressCurrent = 0
+
+function Compute-ProgressTotal {
+    $t = 0
+    if ($InstallEssentials)   { $t += $StepCounts.Essentials }
+    if ($InstallWeb)          { $t += $StepCounts.Web }
+    if ($InstallPython)       { $t += $StepCounts.Python }
+    if ($InstallProductivity) { $t += $StepCounts.Productivity }
+    if ($InstallAI)           { $t += $StepCounts.AI }
+    if ($InstallLinux)        { $t += $StepCounts.Linux }
+    $script:ProgressTotal = [Math]::Max($t, 1)
+}
+
+# Advance the counter and return a right-aligned "[XX%]" tag.
+function Step-Progress {
+    $script:ProgressCurrent++
+    $pct    = [Math]::Min([Math]::Round(($script:ProgressCurrent / $script:ProgressTotal) * 100), 100)
+    $padded = "$pct%".PadLeft(4)
+    return "$DIM[$padded]$RESET"
+}
+
+# ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
 function Write-Log($msg) {
@@ -104,27 +147,44 @@ function Refresh-Path {
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
+# ── Winget-Install ───────────────────────────────────────────────────────────
+# Advances progress, then either dry-runs (no real system calls) or installs.
 function Winget-Install($id, $label) {
+    $pct = Step-Progress
+
+    if ($DryRun) {
+        Write-Host "  $CYAN->$RESET $pct $DIM[dry-run]$RESET Would install: $BOLD$label$RESET"
+        Write-Host "        $DIM winget install --id $id --silent --accept-package-agreements --accept-source-agreements$RESET"
+        Write-Log "DRY-RUN WINGET: $id"
+        return
+    }
+
     $installed = winget list --id $id --exact 2>$null | Select-String $id
     if ($installed) {
-        Success "$label already installed - skipping"
+        Success "$label already installed - skipping $DIM$pct$RESET"
     } else {
-        Info "Installing $label..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] winget install --id $id --silent$RESET"
+        Write-Host "  $CYAN->$RESET $pct Installing $label..."
+        Write-Log "INFO: Installing $label"
+        winget install --id $id --silent --accept-package-agreements --accept-source-agreements
+        if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {
+            Success "$label installed"
         } else {
-            winget install --id $id --silent --accept-package-agreements --accept-source-agreements
-            if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {
-                Success "$label installed"
-            } else {
-                Warn "$label may have had issues (exit: $LASTEXITCODE) - check log"
-            }
+            Warn "$label may have had issues (exit: $LASTEXITCODE) - check log"
         }
         Write-Log "WINGET: $id"
     }
 }
 
+# ── Choco-Install ────────────────────────────────────────────────────────────
+# Fallback only — caller already advanced the progress counter.
+# In dry-run: just prints the command that would run.
 function Choco-Install($pkg, $label) {
+    if ($DryRun) {
+        Write-Host "        $DIM[dry-run fallback] choco install $pkg -y$RESET"
+        Write-Log "DRY-RUN CHOCO: $pkg"
+        return
+    }
+
     if (-not (Has "choco")) {
         Warn "Chocolatey not available - skipping $label"
         return
@@ -134,14 +194,20 @@ function Choco-Install($pkg, $label) {
         Success "$label already installed - skipping"
     } else {
         Info "Installing $label via Chocolatey..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] choco install $pkg -y$RESET"
-        } else {
-            choco install $pkg -y
-            Success "$label installed"
-        }
+        choco install $pkg -y
+        Success "$label installed"
         Write-Log "CHOCO: $pkg"
     }
+}
+
+# ── Install-Step ─────────────────────────────────────────────────────────────
+# For steps that aren't simple winget installs (scripted installs, npm, etc.).
+# Advances progress and prints the "-> [XX%] label..." line.
+# The caller is responsible for the actual work and any Success/Warn output.
+function Install-Step($label) {
+    $pct = Step-Progress
+    Write-Host "  $CYAN->$RESET $pct $label..."
+    Write-Log "INFO: $label"
 }
 
 # ─────────────────────────────────────────────
@@ -163,7 +229,8 @@ function Print-Welcome {
     Write-Host ""
 
     if ($DryRun) {
-        Write-Host "  $YELLOW[DRY RUN MODE]$RESET $YELLOW Nothing will actually be installed.$RESET"
+        Write-Host "  $YELLOW${BOLD}[DRY RUN MODE]$RESET $YELLOW Nothing will actually be installed.$RESET"
+        Write-Host "  $YELLOW  All steps will be previewed. No changes made to your system.$RESET"
         Blank
     }
 }
@@ -190,7 +257,7 @@ function Print-Help {
     Write-Host "    $GREEN--ai$RESET             Gemini CLI, Claude Code"
     Write-Host "    $GREEN--linux$RESET          WSL2 + Ubuntu, Chocolatey  $YELLOW[Windows only]$RESET"
     Write-Host "    $GREEN--all$RESET            Everything above"
-    Write-Host "    $GREEN--dry-run$RESET        Preview what would be installed"
+    Write-Host "    $GREEN--dry-run$RESET        Preview what would be installed (no changes made)"
     Write-Host "    $GREEN--help$RESET           Show this screen"
     Blank
     Dim "  Docs: https://github.com/baraqfi/jumpstart"
@@ -234,17 +301,23 @@ function Check-System {
         Success "Running as Administrator"
     }
 
-    # Internet check
-    try {
-        $null = Invoke-WebRequest -Uri "https://github.com" -UseBasicParsing -TimeoutSec 5
-        Success "Internet connection confirmed"
-    } catch {
-        Err "No internet connection. Please connect and try again."
-        exit 1
+    # Internet check — skipped in dry-run (no real network call needed)
+    if ($DryRun) {
+        Success "Internet check skipped $DIM(dry-run)$RESET"
+    } else {
+        try {
+            $null = Invoke-WebRequest -Uri "https://github.com" -UseBasicParsing -TimeoutSec 5
+            Success "Internet connection confirmed"
+        } catch {
+            Err "No internet connection. Please connect and try again."
+            exit 1
+        }
     }
 
-    # winget check
-    if (Has "winget") {
+    # winget check — in dry-run we assume it exists (we can't install it in preview mode)
+    if ($DryRun) {
+        Success "winget check skipped $DIM(dry-run)$RESET"
+    } elseif (Has "winget") {
         Success "winget (Windows Package Manager) ready"
     } else {
         Warn "winget not found - attempting to install..."
@@ -353,23 +426,34 @@ function Print-Confirm {
     Write-Host "  ${BOLD}Here's what will be installed:$RESET"
     Blank
 
-    if ($InstallEssentials)   { Write-Host "  $GREEN+$RESET Essentials - Git, VS Code, Windows Terminal, Git Bash" }
-    if ($InstallWeb)          { Write-Host "  $GREEN+$RESET Web Dev - Node.js (nvm-windows), pnpm, Docker Desktop, Postman" }
-    if ($InstallPython)       { Write-Host "  $GREEN+$RESET Python - pyenv-win, Python 3, pipx" }
-    if ($InstallProductivity) { Write-Host "  $GREEN+$RESET Productivity - Starship, bat, eza, fzf, GitHub CLI, Nerd Fonts" }
-    if ($InstallAI)           { Write-Host "  $GREEN+$RESET AI CLI Tools - Gemini CLI, Claude Code" }
-    if ($InstallLinux)        { Write-Host "  $GREEN+$RESET Linux on Windows - WSL2 + Ubuntu, Chocolatey $YELLOW(restart required after)$RESET" }
+    if ($InstallEssentials)   { Write-Host "  $GREEN+$RESET Essentials    - Git, VS Code, Windows Terminal, Git Bash" }
+    if ($InstallWeb)          { Write-Host "  $GREEN+$RESET Web Dev       - Node.js (nvm-windows), pnpm, Docker Desktop, Postman" }
+    if ($InstallPython)       { Write-Host "  $GREEN+$RESET Python        - pyenv-win, Python 3, pipx" }
+    if ($InstallProductivity) { Write-Host "  $GREEN+$RESET Productivity  - Starship, bat, eza, fzf, GitHub CLI, Nerd Fonts" }
+    if ($InstallAI)           { Write-Host "  $GREEN+$RESET AI CLI Tools  - Gemini CLI, Claude Code" }
+    if ($InstallLinux)        { Write-Host "  $GREEN+$RESET Linux on Win  - WSL2 + Ubuntu, Chocolatey $YELLOW(restart required after)$RESET" }
 
     Blank
+
+    # Compute total so we can show it on the confirm screen
+    Compute-ProgressTotal
+    $modeLabel = if ($DryRun) { "steps to preview" } else { "packages to install" }
+    Dim "  $($script:ProgressTotal) $modeLabel"
+
     Divider
     Blank
-    Dim "  This may take 10-20 minutes depending on your connection."
-    Dim "  Some tools may open installer windows - follow any prompts."
-    if ($InstallLinux) {
-        Write-Host "  $YELLOW  WSL2 is installed last. A restart will be needed to finish it.$RESET"
+    if (-not $DryRun) {
+        Dim "  This may take 10-20 minutes depending on your connection."
+        Dim "  Some tools may open installer windows - follow any prompts."
+        if ($InstallLinux) {
+            Write-Host "  $YELLOW  WSL2 is installed last. A restart will be needed to finish it.$RESET"
+        }
     }
     Blank
-    Write-Host -NoNewline "  ${BOLD}Ready to go? [Y/n]:$RESET "
+
+    $prompt = if ($DryRun) { "  ${BOLD}Preview the install plan? [Y/n]:$RESET " } `
+              else          { "  ${BOLD}Ready to go? [Y/n]:$RESET " }
+    Write-Host -NoNewline $prompt
     $confirm = Read-Host
 
     if ($confirm -match '^[Nn]$') {
@@ -379,6 +463,10 @@ function Print-Confirm {
         exit 0
     }
 
+    # Reset current counter — Compute-ProgressTotal ran above to show the count,
+    # now zero it so Step-Progress starts fresh during the actual install loop.
+    $script:ProgressCurrent = 0
+
     Blank
 }
 
@@ -386,14 +474,19 @@ function Print-Confirm {
 # ESSENTIALS
 # ─────────────────────────────────────────────
 function Install-Essentials {
-    Write-Host "  ${BOLD}Installing Essentials...$RESET"
+    Write-Host "  ${BOLD}[ Essentials ]$RESET"
     Blank
 
-    Winget-Install "Git.Git" "Git + Git Bash"
-    Refresh-Path
+    # Step 1 — Git + Git Bash
+    Winget-Install "Git.Git" "Git + Git Bash (includes unix/bash commands)"
+    if (-not $DryRun) { Refresh-Path }
 
-    # Check if git config already exists — if not, flag it for the post-install checklist
-    if (Has "git") {
+    # Git config check — no interactive prompt; flag missing config for the
+    # post-install checklist. In dry-run we can't call git, so assume it needs setting.
+    if ($DryRun) {
+        $script:GitConfigSkipped = $true
+        Dim "    [dry-run] Git identity check skipped - will remind at end"
+    } elseif (Has "git") {
         $existingName = git config --global user.name 2>$null
         if (-not $existingName) {
             $script:GitConfigSkipped = $true
@@ -403,12 +496,15 @@ function Install-Essentials {
         }
     }
 
+    # Step 2 — VS Code
     Winget-Install "Microsoft.VisualStudioCode" "VS Code"
+
+    # Step 3 — Windows Terminal
     Winget-Install "Microsoft.WindowsTerminal" "Windows Terminal"
 
     Blank
-    Write-Host "  $DIM  Git Bash tip: find it in your Start menu as 'Git Bash'.$RESET"
-    Write-Host "  $DIM  It gives you ls, cat, grep and other unix commands on Windows.$RESET"
+    Dim "  Git Bash tip: find it in your Start menu as 'Git Bash'."
+    Dim "  It gives you ls, cat, grep and other unix commands on Windows."
     Blank
 }
 
@@ -416,44 +512,60 @@ function Install-Essentials {
 # WEB DEVELOPMENT
 # ─────────────────────────────────────────────
 function Install-Web {
-    Write-Host "  ${BOLD}Installing Web Development tools...$RESET"
+    Write-Host "  ${BOLD}[ Web Development ]$RESET"
     Blank
 
-    if (Has "nvm") {
-        Success "nvm-windows already installed - skipping"
+    # Step 1 — nvm-windows
+    $nvmPresent = (-not $DryRun) -and (Has "nvm")
+    if ($nvmPresent) {
+        $pct = Step-Progress
+        Success "nvm-windows already installed - skipping $DIM$pct$RESET"
     } else {
         Winget-Install "CoreyButler.NVMforWindows" "nvm-windows"
-        Refresh-Path
+        if (-not $DryRun) { Refresh-Path }
     }
 
-    if (Has "node") {
-        Success "Node.js $(node -v 2>$null) already installed - skipping"
+    # Step 2 — Node.js LTS via nvm
+    $nodePresent = (-not $DryRun) -and (Has "node")
+    if ($nodePresent) {
+        $pct = Step-Progress
+        Success "Node.js $(node -v 2>$null) already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing Node.js LTS via nvm"
+        Write-Host "        $DIM nvm install lts$RESET"
+        Write-Host "        $DIM nvm use lts$RESET"
     } elseif (Has "nvm") {
-        Info "Installing Node.js LTS..."
-        if (-not $DryRun) {
-            nvm install lts
-            nvm use lts
-            Refresh-Path
-            Success "Node.js installed"
-        } else {
-            Write-Host "  $DIM[dry-run] nvm install lts && nvm use lts$RESET"
-        }
+        Install-Step "Installing Node.js LTS"
+        nvm install lts
+        nvm use lts
+        Refresh-Path
+        Success "Node.js installed"
     } else {
-        Warn "nvm not yet in PATH - restart PowerShell then run: nvm install lts"
+        $pct = Step-Progress
+        Warn "nvm not yet in PATH $DIM$pct$RESET - restart PowerShell then run: nvm install lts"
     }
 
-    if (Has "pnpm") {
-        Success "pnpm already installed - skipping"
+    # Step 3 — pnpm
+    $pnpmPresent = (-not $DryRun) -and (Has "pnpm")
+    if ($pnpmPresent) {
+        $pct = Step-Progress
+        Success "pnpm already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing pnpm"
+        Write-Host "        $DIM npm install -g pnpm$RESET"
     } elseif (Has "npm") {
-        Info "Installing pnpm..."
-        if (-not $DryRun) { npm install -g pnpm }
-        else { Write-Host "  $DIM[dry-run] npm install -g pnpm$RESET" }
+        Install-Step "Installing pnpm"
+        npm install -g pnpm
         Success "pnpm installed"
     } else {
-        Warn "npm not yet available - install pnpm later with: npm install -g pnpm"
+        $pct = Step-Progress
+        Warn "npm not yet available $DIM$pct$RESET - install pnpm later with: npm install -g pnpm"
     }
 
+    # Step 4 — Docker Desktop
     Winget-Install "Docker.DockerDesktop" "Docker Desktop"
+
+    # Step 5 — Postman
     Winget-Install "Postman.Postman" "Postman"
 
     Blank
@@ -463,60 +575,72 @@ function Install-Web {
 # PYTHON
 # ─────────────────────────────────────────────
 function Install-Python {
-    Write-Host "  ${BOLD}Installing Python tools...$RESET"
+    Write-Host "  ${BOLD}[ Python ]$RESET"
     Blank
 
-    if (Has "pyenv") {
-        Success "pyenv-win already installed - skipping"
+    # Step 1 — pyenv-win
+    $pyenvPresent = (-not $DryRun) -and (Has "pyenv")
+    if ($pyenvPresent) {
+        $pct = Step-Progress
+        Success "pyenv-win already installed - skipping $DIM$pct$RESET"
     } else {
         Winget-Install "PyPA.Pyenv-win" "pyenv-win"
 
-        $pyenvPath = "$env:USERPROFILE\.pyenv\pyenv-win"
-        [System.Environment]::SetEnvironmentVariable("PYENV",      $pyenvPath, "User")
-        [System.Environment]::SetEnvironmentVariable("PYENV_ROOT", $pyenvPath, "User")
-        [System.Environment]::SetEnvironmentVariable("PYENV_HOME", $pyenvPath, "User")
-
-        $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-        if ($currentPath -notmatch "pyenv") {
-            [System.Environment]::SetEnvironmentVariable(
-                "Path",
-                "$pyenvPath\bin;$pyenvPath\shims;$currentPath",
-                "User"
-            )
-        }
-        Refresh-Path
-    }
-
-    $pythonVersion = "3.12.4"
-    if (Has "python") {
-        Success "Python ($(python --version 2>$null)) already installed - skipping"
-    } elseif (Has "pyenv") {
-        Info "Installing Python $pythonVersion (this may take a few minutes)..."
         if (-not $DryRun) {
-            pyenv install $pythonVersion
-            pyenv global $pythonVersion
+            $pyenvPath = "$env:USERPROFILE\.pyenv\pyenv-win"
+            [System.Environment]::SetEnvironmentVariable("PYENV",      $pyenvPath, "User")
+            [System.Environment]::SetEnvironmentVariable("PYENV_ROOT", $pyenvPath, "User")
+            [System.Environment]::SetEnvironmentVariable("PYENV_HOME", $pyenvPath, "User")
+            $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if ($currentPath -notmatch "pyenv") {
+                [System.Environment]::SetEnvironmentVariable(
+                    "Path",
+                    "$pyenvPath\bin;$pyenvPath\shims;$currentPath",
+                    "User"
+                )
+            }
             Refresh-Path
-            Success "Python $pythonVersion set as default"
-        } else {
-            Write-Host "  $DIM[dry-run] pyenv install $pythonVersion && pyenv global $pythonVersion$RESET"
         }
-    } else {
-        Warn "pyenv not yet in PATH - restart PowerShell then run: pyenv install $pythonVersion"
     }
 
-    if (Has "pipx") {
-        Success "pipx already installed - skipping"
+    # Step 2 — Python via pyenv
+    $pythonVersion = "3.12.4"
+    $pythonPresent = (-not $DryRun) -and (Has "python")
+    if ($pythonPresent) {
+        $pct = Step-Progress
+        Success "Python ($(python --version 2>$null)) already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing Python $pythonVersion via pyenv"
+        Write-Host "        $DIM pyenv install $pythonVersion$RESET"
+        Write-Host "        $DIM pyenv global $pythonVersion$RESET"
+    } elseif (Has "pyenv") {
+        Install-Step "Installing Python $pythonVersion (this may take a few minutes)"
+        pyenv install $pythonVersion
+        pyenv global $pythonVersion
+        Refresh-Path
+        Success "Python $pythonVersion set as default"
+    } else {
+        $pct = Step-Progress
+        Warn "pyenv not yet in PATH $DIM$pct$RESET - restart PowerShell then run: pyenv install $pythonVersion"
+    }
+
+    # Step 3 — pipx
+    $pipxPresent = (-not $DryRun) -and (Has "pipx")
+    if ($pipxPresent) {
+        $pct = Step-Progress
+        Success "pipx already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing pipx"
+        Write-Host "        $DIM pip install --user pipx$RESET"
+        Write-Host "        $DIM python -m pipx ensurepath$RESET"
     } elseif (Has "pip") {
-        Info "Installing pipx..."
-        if (-not $DryRun) {
-            pip install --user pipx
-            python -m pipx ensurepath
-        } else {
-            Write-Host "  $DIM[dry-run] pip install --user pipx$RESET"
-        }
+        Install-Step "Installing pipx"
+        pip install --user pipx
+        python -m pipx ensurepath
         Success "pipx installed"
     } else {
-        Warn "pip not yet available - install pipx later with: pip install --user pipx"
+        $pct = Step-Progress
+        Warn "pip not yet available $DIM$pct$RESET - install pipx later with: pip install --user pipx"
     }
 
     Blank
@@ -526,59 +650,73 @@ function Install-Python {
 # PRODUCTIVITY
 # ─────────────────────────────────────────────
 function Install-Productivity {
-    Write-Host "  ${BOLD}Installing Productivity tools...$RESET"
+    Write-Host "  ${BOLD}[ Productivity Tools ]$RESET"
     Blank
 
-    if (Has "starship") {
-        Success "Starship prompt already installed - skipping"
+    # Step 1 — Starship
+    $starshipPresent = (-not $DryRun) -and (Has "starship")
+    if ($starshipPresent) {
+        $pct = Step-Progress
+        Success "Starship prompt already installed - skipping $DIM$pct$RESET"
     } else {
         Winget-Install "Starship.Starship" "Starship prompt"
-        Refresh-Path
 
-        $profileDir = Split-Path $PROFILE
-        if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
-        if (-not (Test-Path $PROFILE))    { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
-
-        $profileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-        if ($profileContent -notmatch 'starship') {
-            if (-not $DryRun) {
+        if ($DryRun) {
+            Dim "    [dry-run] Would add: Invoke-Expression (&starship init powershell) to PowerShell profile"
+        } else {
+            Refresh-Path
+            $profileDir = Split-Path $PROFILE
+            if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
+            if (-not (Test-Path $PROFILE))    { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
+            $profileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
+            if ($profileContent -notmatch 'starship') {
                 Add-Content -Path $PROFILE -Value "`n# Starship prompt`nInvoke-Expression (&starship init powershell)"
             }
+            Success "Starship added to PowerShell profile"
         }
-        Success "Starship installed and added to PowerShell profile"
     }
 
+    # Step 2 — Nerd Font
     Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
 
-    # bat - winget first, choco fallback
-    if (Has "bat") {
-        Success "bat already installed - skipping"
+    # Step 3 — bat (winget first, choco fallback)
+    $batPresent = (-not $DryRun) -and (Has "bat")
+    if ($batPresent) {
+        $pct = Step-Progress
+        Success "bat already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        $pct = Step-Progress
+        Write-Host "  $CYAN->$RESET $pct $DIM[dry-run]$RESET Would install: $BOLDbat$RESET (better file viewer)"
+        Write-Host "        $DIM winget install sharkdp.bat --silent  (choco install bat -y as fallback)$RESET"
     } else {
-        Info "Installing bat (better file viewer)..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] winget install sharkdp.bat$RESET"
-        } else {
-            winget install --id sharkdp.bat --silent --accept-package-agreements --accept-source-agreements 2>$null
-            if ($LASTEXITCODE -ne 0) { Choco-Install "bat" "bat" }
-            else { Refresh-Path; Success "bat installed" }
-        }
+        $pct = Step-Progress
+        Write-Host "  $CYAN->$RESET $pct Installing bat (better file viewer)..."
+        winget install --id sharkdp.bat --silent --accept-package-agreements --accept-source-agreements 2>$null
+        if ($LASTEXITCODE -ne 0) { Choco-Install "bat" "bat" }
+        else { Refresh-Path; Success "bat installed" }
     }
 
-    # eza - winget first, choco fallback
-    if (Has "eza") {
-        Success "eza already installed - skipping"
+    # Step 4 — eza (winget first, choco fallback)
+    $ezaPresent = (-not $DryRun) -and (Has "eza")
+    if ($ezaPresent) {
+        $pct = Step-Progress
+        Success "eza already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        $pct = Step-Progress
+        Write-Host "  $CYAN->$RESET $pct $DIM[dry-run]$RESET Would install: $BOLDeza$RESET (better directory listing)"
+        Write-Host "        $DIM winget install eza-community.eza --silent  (choco install eza -y as fallback)$RESET"
     } else {
-        Info "Installing eza (better directory listing)..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] winget install eza-community.eza$RESET"
-        } else {
-            winget install --id eza-community.eza --silent --accept-package-agreements --accept-source-agreements 2>$null
-            if ($LASTEXITCODE -ne 0) { Choco-Install "eza" "eza" }
-            else { Refresh-Path; Success "eza installed" }
-        }
+        $pct = Step-Progress
+        Write-Host "  $CYAN->$RESET $pct Installing eza (better directory listing)..."
+        winget install --id eza-community.eza --silent --accept-package-agreements --accept-source-agreements 2>$null
+        if ($LASTEXITCODE -ne 0) { Choco-Install "eza" "eza" }
+        else { Refresh-Path; Success "eza installed" }
     }
 
+    # Step 5 — fzf
     Winget-Install "junegunn.fzf" "fzf (fuzzy finder)"
+
+    # Step 6 — GitHub CLI
     Winget-Install "GitHub.cli" "GitHub CLI"
 
     Blank
@@ -588,39 +726,52 @@ function Install-Productivity {
 # AI CLI TOOLS
 # ─────────────────────────────────────────────
 function Install-AI {
-    Write-Host "  ${BOLD}Installing AI CLI Tools...$RESET"
+    Write-Host "  ${BOLD}[ AI CLI Tools ]$RESET"
     Blank
 
-    Write-Host "  $DIM  These tools require API keys - JumpStart will NOT handle your keys.$RESET"
-    Write-Host "  $DIM  After install, we'll show you exactly where to get them.$RESET"
+    Dim "  These tools require API keys - JumpStart will NOT handle your keys."
+    Dim "  After install, we'll show you exactly where to get them."
     Blank
 
-    Refresh-Path
+    if (-not $DryRun) { Refresh-Path }
 
-    if (-not (Has "npm")) {
+    # In dry-run we assume npm will be available (can't check without running node)
+    $npmAvailable = $DryRun -or (Has "npm")
+
+    if (-not $npmAvailable) {
+        # Consume both steps so the total stays accurate
+        $null = Step-Progress; $null = Step-Progress
         Warn "Node.js/npm is required for AI CLI tools."
         Warn "Select Web Dev (option 2) first, then re-run with --ai"
         Blank
         return
     }
 
-    $geminiCheck = npm list -g @google/gemini-cli 2>$null | Select-String "gemini-cli"
-    if ($geminiCheck) {
-        Success "Gemini CLI already installed - skipping"
+    # Step 1 — Gemini CLI
+    $geminiPresent = (-not $DryRun) -and (npm list -g @google/gemini-cli 2>$null | Select-String "gemini-cli")
+    if ($geminiPresent) {
+        $pct = Step-Progress
+        Success "Gemini CLI already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing Gemini CLI (Google)"
+        Write-Host "        $DIM npm install -g @google/gemini-cli$RESET"
     } else {
-        Info "Installing Gemini CLI (Google)..."
-        if (-not $DryRun) { npm install -g @google/gemini-cli }
-        else { Write-Host "  $DIM[dry-run] npm install -g @google/gemini-cli$RESET" }
+        Install-Step "Installing Gemini CLI (Google)"
+        npm install -g @google/gemini-cli
         Success "Gemini CLI installed"
     }
 
-    $claudeCheck = npm list -g @anthropic-ai/claude-code 2>$null | Select-String "claude-code"
-    if ($claudeCheck) {
-        Success "Claude Code already installed - skipping"
+    # Step 2 — Claude Code
+    $claudePresent = (-not $DryRun) -and (npm list -g @anthropic-ai/claude-code 2>$null | Select-String "claude-code")
+    if ($claudePresent) {
+        $pct = Step-Progress
+        Success "Claude Code already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing Claude Code (Anthropic)"
+        Write-Host "        $DIM npm install -g @anthropic-ai/claude-code$RESET"
     } else {
-        Info "Installing Claude Code (Anthropic)..."
-        if (-not $DryRun) { npm install -g @anthropic-ai/claude-code }
-        else { Write-Host "  $DIM[dry-run] npm install -g @anthropic-ai/claude-code$RESET" }
+        Install-Step "Installing Claude Code (Anthropic)"
+        npm install -g @anthropic-ai/claude-code
         Success "Claude Code installed"
     }
 
@@ -631,36 +782,39 @@ function Install-AI {
 # LINUX ON WINDOWS
 # ─────────────────────────────────────────────
 function Install-Linux {
-    Write-Host "  ${BOLD}Installing Linux on Windows...$RESET"
+    Write-Host "  ${BOLD}[ Linux on Windows ]$RESET"
     Blank
 
-    # ── CHOCOLATEY ──────────────────────────────
+    # ── Step 1: Chocolatey ───────────────────────
     Write-Host "  ${BOLD}Setting up Chocolatey (package manager)...$RESET"
     Blank
 
-    if (Has "choco") {
-        Success "Chocolatey already installed - skipping"
+    $chocoPresent = (-not $DryRun) -and (Has "choco")
+    if ($chocoPresent) {
+        $pct = Step-Progress
+        Success "Chocolatey already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Installing Chocolatey"
+        Write-Host "        $DIM Set-ExecutionPolicy Bypass -Scope Process -Force$RESET"
+        Write-Host "        $DIM [Net.ServicePointManager]::SecurityProtocol |= 3072$RESET"
+        Write-Host "        $DIM Invoke-Expression (DownloadString 'https://community.chocolatey.org/install.ps1')$RESET"
     } else {
-        Info "Installing Chocolatey..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] Install-Chocolatey$RESET"
-        } else {
-            try {
-                Set-ExecutionPolicy Bypass -Scope Process -Force
-                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-                Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-                Refresh-Path
-                Success "Chocolatey installed"
-            } catch {
-                Warn "Chocolatey install failed: $_"
-                Warn "Install manually at: https://chocolatey.org/install"
-            }
+        Install-Step "Installing Chocolatey"
+        try {
+            Set-ExecutionPolicy Bypass -Scope Process -Force
+            [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+            Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+            Refresh-Path
+            Success "Chocolatey installed"
+        } catch {
+            Warn "Chocolatey install failed: $_"
+            Warn "Install manually at: https://chocolatey.org/install"
         }
     }
 
     Blank
 
-    # ── WSL2 ────────────────────────────────────
+    # ── Step 2: WSL2 + Ubuntu ───────────────────
     Write-Host "  ${BOLD}Setting up WSL2 + Ubuntu...$RESET"
     Blank
 
@@ -669,38 +823,43 @@ function Install-Linux {
     Dim "  After setup, open 'Ubuntu' from your Start menu to use it."
     Blank
 
+    # wsl --list is a real system call — skip entirely in dry-run
     $wslAlreadyOn = $false
-    try {
-        $wslList = wsl --list 2>$null
-        if ($wslList -match "Ubuntu") { $wslAlreadyOn = $true }
-    } catch {}
+    if (-not $DryRun) {
+        try {
+            $wslList = wsl --list 2>$null
+            if ($wslList -match "Ubuntu") { $wslAlreadyOn = $true }
+        } catch {}
+    }
 
     if ($wslAlreadyOn) {
-        Success "WSL2 + Ubuntu already installed - skipping"
+        $pct = Step-Progress
+        Success "WSL2 + Ubuntu already installed - skipping $DIM$pct$RESET"
+    } elseif ($DryRun) {
+        Install-Step "Enabling WSL2 + installing Ubuntu"
+        Write-Host "        $DIM dism /enable-feature Microsoft-Windows-Subsystem-Linux /all /norestart$RESET"
+        Write-Host "        $DIM dism /enable-feature VirtualMachinePlatform /all /norestart$RESET"
+        Write-Host "        $DIM wsl --set-default-version 2$RESET"
+        Write-Host "        $DIM wsl --install -d Ubuntu$RESET"
+        Write-Host "  $YELLOW  Note: a system restart would be required after this step.$RESET"
     } else {
-        Info "Enabling WSL2..."
-        Write-Host ""
+        $pct = Step-Progress
+        Write-Host "  $CYAN->$RESET $pct Enabling WSL2..."
+        Blank
         Write-Host "  $YELLOW  WSL2 will be enabled and Ubuntu will be installed.$RESET"
         Write-Host "  $YELLOW  A restart is required to finish - JumpStart will prompt you.$RESET"
         Blank
 
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] dism /enable-feature Microsoft-Windows-Subsystem-Linux$RESET"
-            Write-Host "  $DIM[dry-run] dism /enable-feature VirtualMachinePlatform$RESET"
-            Write-Host "  $DIM[dry-run] wsl --set-default-version 2$RESET"
-            Write-Host "  $DIM[dry-run] wsl --install -d Ubuntu$RESET"
-        } else {
-            try {
-                dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
-                dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
-                wsl --set-default-version 2 2>$null
-                wsl --install -d Ubuntu
-                $script:RestartRequired = $true
-                Success "WSL2 + Ubuntu install initiated - restart required to finish"
-            } catch {
-                Warn "WSL2 install encountered an issue: $_"
-                Warn "Try manually: open PowerShell as Admin and run: wsl --install -d Ubuntu"
-            }
+        try {
+            dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
+            dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
+            wsl --set-default-version 2 2>$null
+            wsl --install -d Ubuntu
+            $script:RestartRequired = $true
+            Success "WSL2 + Ubuntu install initiated - restart required to finish"
+        } catch {
+            Warn "WSL2 install encountered an issue: $_"
+            Warn "Try manually: open PowerShell as Admin and run: wsl --install -d Ubuntu"
         }
     }
 
@@ -733,11 +892,21 @@ function Print-AIKeysGuide {
 # ─────────────────────────────────────────────
 function Print-NextSteps {
     Blank
-    Write-Host "  $BOLD$GREEN+=========================================================+"
-    Write-Host "  |                                                         |"
-    Write-Host "  |   You're all set up! Here's what to do next.           |"
-    Write-Host "  |                                                         |"
-    Write-Host "  +=========================================================+$RESET"
+
+    if ($DryRun) {
+        Write-Host "  $BOLD$YELLOW+=========================================================+"
+        Write-Host "  |                                                         |"
+        Write-Host "  |   Dry run complete. No changes were made.              |"
+        Write-Host "  |   Re-run without --dry-run to actually install.        |"
+        Write-Host "  |                                                         |"
+        Write-Host "  +=========================================================+$RESET"
+    } else {
+        Write-Host "  $BOLD$GREEN+=========================================================+"
+        Write-Host "  |                                                         |"
+        Write-Host "  |   You're all set up! Here's what to do next.           |"
+        Write-Host "  |                                                         |"
+        Write-Host "  +=========================================================+$RESET"
+    }
     Blank
 
     Write-Host "  ${BOLD}Finish your setup — do these after closing this window:$RESET"
@@ -745,11 +914,13 @@ function Print-NextSteps {
 
     $step = 1
 
-    # Always: reopen terminal
-    Write-Host "  $CYAN[$step]$RESET Close and reopen PowerShell so all new tools are recognized"
-    $step++
+    # Reopen terminal (not needed after a dry-run, but still good advice)
+    if (-not $DryRun) {
+        Write-Host "  $CYAN[$step]$RESET Close and reopen PowerShell so all new tools are recognized"
+        $step++
+    }
 
-    # Git identity — shown if git was installed but config was skipped
+    # Git identity — shown if git config was not already set
     if ($script:GitConfigSkipped) {
         Write-Host "  $CYAN[$step]$RESET $YELLOW${BOLD}Set your Git identity$RESET $DIM(required for commits)$RESET"
         Dim "      git config --global user.name `"Your Name`""
@@ -758,7 +929,7 @@ function Print-NextSteps {
         $step++
     }
 
-    # Git auth
+    # GitHub authentication
     if ($InstallEssentials) {
         Write-Host "  $CYAN[$step]$RESET $YELLOW${BOLD}Authenticate with GitHub$RESET $DIM(so you can push/pull repos)$RESET"
         Dim "      Option A - GitHub CLI (recommended):"
@@ -769,19 +940,19 @@ function Print-NextSteps {
         $step++
     }
 
-    # VS Code
+    # VS Code quick tip
     if ($InstallEssentials) {
         Write-Host "  $CYAN[$step]$RESET Open VS Code anywhere by typing: $CYAN code .$RESET"
         $step++
     }
 
-    # Git Bash tip
+    # Git Bash
     if ($InstallEssentials) {
         Write-Host "  $CYAN[$step]$RESET Find $BOLD'Git Bash'$RESET in Start menu for unix/bash commands $DIM(ls, cat, grep...)$RESET"
         $step++
     }
 
-    # Node
+    # Node / npm
     if ($InstallWeb) {
         Write-Host "  $CYAN[$step]$RESET Verify Node.js: $CYAN node -v$RESET  and npm: $CYAN npm -v$RESET"
         $step++
@@ -800,7 +971,7 @@ function Print-NextSteps {
         $step++
     }
 
-    # WSL2 restart + first-run
+    # WSL2 restart + first-run instructions
     if ($InstallLinux) {
         Blank
         Write-Host "  $YELLOW${BOLD}  WSL2 requires a restart to fully activate$RESET"
@@ -813,7 +984,7 @@ function Print-NextSteps {
         $step++
     }
 
-    # AI keys
+    # AI API key setup
     if ($InstallAI) {
         Print-AIKeysGuide
     }
@@ -821,7 +992,11 @@ function Print-NextSteps {
     Blank
     Divider
     Blank
-    Dim "  Full install log saved to: $LogFile"
+    if ($DryRun) {
+        Dim "  Re-run without --dry-run to apply these changes."
+    } else {
+        Dim "  Full install log saved to: $LogFile"
+    }
     Dim "  Found this useful? Star us: github.com/baraqfi/jumpstart"
     Dim "  Issues? github.com/baraqfi/jumpstart/issues"
     Blank
@@ -855,7 +1030,7 @@ function Main {
         Print-Confirm
     }
 
-    # WSL2 always goes last - it needs a restart and shouldn't block other installs
+    # WSL2 always goes last — it requires a restart and shouldn't block other installs
     if ($InstallEssentials)   { Section; Install-Essentials }
     if ($InstallWeb)          { Section; Install-Web }
     if ($InstallPython)       { Section; Install-Python }
@@ -867,8 +1042,8 @@ function Main {
 
     "JumpStart install completed at $(Get-Date)" | Add-Content -Path $LogFile
 
-    # Restart prompt if WSL2 was newly installed
-    if ($script:RestartRequired) {
+    # Restart prompt — only after a real install that needed WSL2
+    if ($script:RestartRequired -and -not $DryRun) {
         Blank
         Write-Host "  $YELLOW${BOLD}  A restart is required to finish WSL2 setup.$RESET"
         Write-Host -NoNewline "  Restart now? [y/N]: "
