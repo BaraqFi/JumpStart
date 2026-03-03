@@ -103,45 +103,107 @@ function Refresh-Path {
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
-function Winget-Install($id, $label, $override) {
-    $installed = winget list --id $id --exact 2>$null | Select-String ([regex]::Escape($id))
+# ─────────────────────────────────────────────
+# SPINNER
+# ─────────────────────────────────────────────
+# Runs a script block in a background job while animating a spinner.
+# Usage: Run-WithSpinner "Installing Git..." { winget install ... }
+function Run-WithSpinner {
+    param(
+        [string]$Label,
+        [scriptblock]$Action
+    )
+
+    if ($DryRun) {
+        Write-Host "  $DIM[dry-run] $Label$RESET"
+        return
+    }
+
+    $frames  = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    $i       = 0
+    $col     = $HOST.UI.RawUI.CursorPosition
+
+    # Start the actual work in a background job
+    $job = Start-Job -ScriptBlock $Action
+
+    # Animate while job runs
+    [Console]::CursorVisible = $false
+    try {
+        while ($job.State -eq 'Running') {
+            $frame = $frames[$i % $frames.Length]
+            $HOST.UI.RawUI.CursorPosition = $col
+            Write-Host -NoNewline "  $CYAN$frame$RESET $Label   " 
+            Start-Sleep -Milliseconds 80
+            $i++
+        }
+    } finally {
+        [Console]::CursorVisible = $true
+    }
+
+    # Clear spinner line, print final state
+    $HOST.UI.RawUI.CursorPosition = $col
+    Write-Host ("  " + (" " * ($Label.Length + 6)))   # erase line
+
+    # Collect output and exit code from job
+    $result = Receive-Job -Job $job -Wait -ErrorAction SilentlyContinue
+    Remove-Job -Job $job -Force
+
+    Write-Log "RUN: $Label"
+}
+
+function Winget-Install($id, $label) {
+    $installed = winget list --id $id --exact 2>$null | Select-String $id
     if ($installed) {
         Success "$label already installed - skipping"
-    } else {
-        Info "Installing $label..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] winget install --id $id --silent$RESET"
-        } else {
-            # Build the argument string
-            $argString = "install --id $id --silent --accept-package-agreements --accept-source-agreements"
-            if ($override) { $argString += " --override `"$override`"" }
-
-            # Run winget in a hidden window so we can show a spinner
-            $proc = Start-Process -FilePath "winget" -ArgumentList $argString -PassThru -WindowStyle Hidden
-
-            # Spinner animation while waiting
-            $spinner = @('|', '/', '-', '\')
-            $i = 0
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            while (-not $proc.HasExited) {
-                $elapsed = $sw.Elapsed.ToString("mm\:ss")
-                Write-Host -NoNewline "`r    $($spinner[$i % 4]) installing... $DIM($elapsed)$RESET  "
-                $i++
-                Start-Sleep -Milliseconds 400
-            }
-            $sw.Stop()
-            $elapsed = $sw.Elapsed.ToString("mm\:ss")
-            Write-Host "`r    done ($elapsed)                    "
-
-            $exitCode = $proc.ExitCode
-            if ($exitCode -eq 0 -or $exitCode -eq -1978335189) {
-                Success "$label installed"
-            } else {
-                Warn "$label may have had issues (exit: $exitCode)"
-            }
-        }
-        Write-Log "WINGET: $id"
+        return
     }
+
+    if ($DryRun) {
+        Write-Host "  $DIM[dry-run] winget install --id $id --silent$RESET"
+        Write-Log "DRY-RUN WINGET: $id"
+        return
+    }
+
+    # Spinner while winget runs silently in background
+    $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    $i = 0
+    [Console]::CursorVisible = $false
+
+    $job = Start-Job -ScriptBlock {
+        param($pkgId)
+        winget install --id $pkgId --silent --accept-package-agreements --accept-source-agreements 2>&1
+        $LASTEXITCODE
+    } -ArgumentList $id
+
+    $startPos = $HOST.UI.RawUI.CursorPosition
+    try {
+        while ($job.State -eq 'Running') {
+            $frame = $frames[$i % $frames.Length]
+            $HOST.UI.RawUI.CursorPosition = $startPos
+            Write-Host -NoNewline "  $CYAN$frame$RESET Installing $label...   "
+            Start-Sleep -Milliseconds 80
+            $i++
+        }
+    } finally {
+        [Console]::CursorVisible = $true
+        $HOST.UI.RawUI.CursorPosition = $startPos
+        Write-Host ("  " + (" " * ($label.Length + 20)))  # clear line
+        $HOST.UI.RawUI.CursorPosition = $startPos
+    }
+
+    $jobOutput = Receive-Job -Job $job -Wait
+    Remove-Job -Job $job -Force
+
+    # Last item in output is the exit code from the job
+    $exitCode = $jobOutput | Select-Object -Last 1
+
+    if ($exitCode -eq 0 -or $exitCode -eq -1978335189) {
+        Success "$label installed"
+    } else {
+        Warn "$label may have had issues (exit: $exitCode) - check log"
+    }
+
+    Write-Log "WINGET: $id"
 }
 
 function Choco-Install($pkg, $label) {
@@ -149,19 +211,48 @@ function Choco-Install($pkg, $label) {
         Warn "Chocolatey not available - skipping $label"
         return
     }
-    $installed = choco list $pkg 2>$null | Select-String "^$pkg "
+    $installed = choco list --local-only $pkg 2>$null | Select-String "^$pkg "
     if ($installed) {
         Success "$label already installed - skipping"
-    } else {
-        Info "Installing $label via Chocolatey..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] choco install $pkg -y$RESET"
-        } else {
-            choco install $pkg -y
-            Success "$label installed"
-        }
-        Write-Log "CHOCO: $pkg"
+        return
     }
+
+    if ($DryRun) {
+        Write-Host "  $DIM[dry-run] choco install $pkg -y$RESET"
+        Write-Log "DRY-RUN CHOCO: $pkg"
+        return
+    }
+
+    $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    $i = 0
+    [Console]::CursorVisible = $false
+
+    $job = Start-Job -ScriptBlock {
+        param($p)
+        choco install $p -y 2>&1
+    } -ArgumentList $pkg
+
+    $startPos = $HOST.UI.RawUI.CursorPosition
+    try {
+        while ($job.State -eq 'Running') {
+            $frame = $frames[$i % $frames.Length]
+            $HOST.UI.RawUI.CursorPosition = $startPos
+            Write-Host -NoNewline "  $CYAN$frame$RESET Installing $label...   "
+            Start-Sleep -Milliseconds 80
+            $i++
+        }
+    } finally {
+        [Console]::CursorVisible = $true
+        $HOST.UI.RawUI.CursorPosition = $startPos
+        Write-Host ("  " + (" " * ($label.Length + 20)))
+        $HOST.UI.RawUI.CursorPosition = $startPos
+    }
+
+    Receive-Job -Job $job -Wait | Out-Null
+    Remove-Job -Job $job -Force
+
+    Success "$label installed"
+    Write-Log "CHOCO: $pkg"
 }
 
 # ─────────────────────────────────────────────
@@ -410,8 +501,8 @@ function Install-Essentials {
     Blank
 
     # Git installs Git Bash as part of the package
-    # Use /VERYSILENT so the InnoSetup installer doesn't open a hidden GUI window
-    Winget-Install "Git.Git" "Git + Git Bash" "/VERYSILENT /NORESTART"
+    Info "Installing Git (includes Git Bash for unix/bash commands)..."
+    Winget-Install "Git.Git" "Git + Git Bash"
     Refresh-Path
 
     # Git config
@@ -462,22 +553,28 @@ function Install-Web {
     if (Has "node") {
         Success "Node.js $(node -v 2>$null) already installed - skipping"
     } elseif (Has "nvm") {
-        Info "Installing Node.js LTS..."
-        if (-not $DryRun) {
-            # nvm-windows requires the actual version number for 'nvm use'
-            $nvmOutput = nvm install lts 2>&1 | Out-String
-            # Parse the version number (e.g. "20.14.0") from nvm output
-            if ($nvmOutput -match '(\d+\.\d+\.\d+)') {
-                $nodeVer = $Matches[1]
-                nvm use $nodeVer
-            } else {
-                # Fallback: try using the latest installed version
-                nvm use newest 2>$null
+        if ($DryRun) {
+            Write-Host "  $DIM[dry-run] nvm install lts && nvm use lts$RESET"
+        } else {
+            $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'); $fi = 0
+            [Console]::CursorVisible = $false
+            $job = Start-Job -ScriptBlock { nvm install lts 2>&1; nvm use lts 2>&1 }
+            $pos = $HOST.UI.RawUI.CursorPosition
+            try {
+                while ($job.State -eq 'Running') {
+                    $HOST.UI.RawUI.CursorPosition = $pos
+                    Write-Host -NoNewline "  $CYAN$($frames[$fi++ % $frames.Length])$RESET Installing Node.js LTS...   "
+                    Start-Sleep -Milliseconds 80
+                }
+            } finally {
+                [Console]::CursorVisible = $true
+                $HOST.UI.RawUI.CursorPosition = $pos
+                Write-Host ("  " + (" " * 40))
+                $HOST.UI.RawUI.CursorPosition = $pos
             }
+            Receive-Job -Job $job -Wait | Out-Null; Remove-Job -Job $job -Force
             Refresh-Path
             Success "Node.js installed"
-        } else {
-            Write-Host "  $DIM[dry-run] nvm install lts && nvm use <version>$RESET"
         }
     } else {
         Warn "nvm not yet in PATH - restart PowerShell then run: nvm install lts"
@@ -486,12 +583,27 @@ function Install-Web {
     if (Has "pnpm") {
         Success "pnpm already installed - skipping"
     } elseif (Has "npm") {
-        Info "Installing pnpm..."
-        if (-not $DryRun) {
-            npm install -g pnpm
-            Success "pnpm installed"
-        } else {
+        if ($DryRun) {
             Write-Host "  $DIM[dry-run] npm install -g pnpm$RESET"
+        } else {
+            $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'); $fi = 0
+            [Console]::CursorVisible = $false
+            $job = Start-Job -ScriptBlock { npm install -g pnpm 2>&1 }
+            $pos = $HOST.UI.RawUI.CursorPosition
+            try {
+                while ($job.State -eq 'Running') {
+                    $HOST.UI.RawUI.CursorPosition = $pos
+                    Write-Host -NoNewline "  $CYAN$($frames[$fi++ % $frames.Length])$RESET Installing pnpm...   "
+                    Start-Sleep -Milliseconds 80
+                }
+            } finally {
+                [Console]::CursorVisible = $true
+                $HOST.UI.RawUI.CursorPosition = $pos
+                Write-Host ("  " + (" " * 30))
+                $HOST.UI.RawUI.CursorPosition = $pos
+            }
+            Receive-Job -Job $job -Wait | Out-Null; Remove-Job -Job $job -Force
+            Success "pnpm installed"
         }
     } else {
         Warn "npm not yet available - install pnpm later with: npm install -g pnpm"
@@ -513,38 +625,54 @@ function Install-Python {
     if (Has "pyenv") {
         Success "pyenv-win already installed - skipping"
     } else {
-        Winget-Install "pyenv-win.pyenv-win" "pyenv-win"
+        Winget-Install "PyPA.Pyenv-win" "pyenv-win"
 
-        if (-not $DryRun) {
-            $pyenvPath = "$env:USERPROFILE\.pyenv\pyenv-win"
-            [System.Environment]::SetEnvironmentVariable("PYENV",      $pyenvPath, "User")
-            [System.Environment]::SetEnvironmentVariable("PYENV_ROOT", $pyenvPath, "User")
-            [System.Environment]::SetEnvironmentVariable("PYENV_HOME", $pyenvPath, "User")
+        $pyenvPath = "$env:USERPROFILE\.pyenv\pyenv-win"
+        [System.Environment]::SetEnvironmentVariable("PYENV",      $pyenvPath, "User")
+        [System.Environment]::SetEnvironmentVariable("PYENV_ROOT", $pyenvPath, "User")
+        [System.Environment]::SetEnvironmentVariable("PYENV_HOME", $pyenvPath, "User")
 
-            $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-            if ($currentPath -notmatch "pyenv") {
-                [System.Environment]::SetEnvironmentVariable(
-                    "Path",
-                    "$pyenvPath\bin;$pyenvPath\shims;$currentPath",
-                    "User"
-                )
-            }
-            Refresh-Path
+        $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+        if ($currentPath -notmatch "pyenv") {
+            [System.Environment]::SetEnvironmentVariable(
+                "Path",
+                "$pyenvPath\bin;$pyenvPath\shims;$currentPath",
+                "User"
+            )
         }
+        Refresh-Path
     }
 
     $pythonVersion = "3.12.4"
     if (Has "python") {
         Success "Python ($(python --version 2>$null)) already installed - skipping"
     } elseif (Has "pyenv") {
-        Info "Installing Python $pythonVersion (this may take a few minutes)..."
-        if (-not $DryRun) {
-            pyenv install $pythonVersion
-            pyenv global $pythonVersion
+        if ($DryRun) {
+            Write-Host "  $DIM[dry-run] pyenv install $pythonVersion && pyenv global $pythonVersion$RESET"
+        } else {
+            $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'); $fi = 0
+            [Console]::CursorVisible = $false
+            $job = Start-Job -ScriptBlock {
+                param($v)
+                pyenv install $v 2>&1
+                pyenv global $v 2>&1
+            } -ArgumentList $pythonVersion
+            $pos = $HOST.UI.RawUI.CursorPosition
+            try {
+                while ($job.State -eq 'Running') {
+                    $HOST.UI.RawUI.CursorPosition = $pos
+                    Write-Host -NoNewline "  $CYAN$($frames[$fi++ % $frames.Length])$RESET Installing Python $pythonVersion (this may take a few minutes)...   "
+                    Start-Sleep -Milliseconds 80
+                }
+            } finally {
+                [Console]::CursorVisible = $true
+                $HOST.UI.RawUI.CursorPosition = $pos
+                Write-Host ("  " + (" " * 60))
+                $HOST.UI.RawUI.CursorPosition = $pos
+            }
+            Receive-Job -Job $job -Wait | Out-Null; Remove-Job -Job $job -Force
             Refresh-Path
             Success "Python $pythonVersion set as default"
-        } else {
-            Write-Host "  $DIM[dry-run] pyenv install $pythonVersion && pyenv global $pythonVersion$RESET"
         }
     } else {
         Warn "pyenv not yet in PATH - restart PowerShell then run: pyenv install $pythonVersion"
@@ -553,13 +681,27 @@ function Install-Python {
     if (Has "pipx") {
         Success "pipx already installed - skipping"
     } elseif (Has "pip") {
-        Info "Installing pipx..."
-        if (-not $DryRun) {
-            pip install --user pipx
-            python -m pipx ensurepath
-            Success "pipx installed"
-        } else {
+        if ($DryRun) {
             Write-Host "  $DIM[dry-run] pip install --user pipx$RESET"
+        } else {
+            $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'); $fi = 0
+            [Console]::CursorVisible = $false
+            $job = Start-Job -ScriptBlock { pip install --user pipx 2>&1; python -m pipx ensurepath 2>&1 }
+            $pos = $HOST.UI.RawUI.CursorPosition
+            try {
+                while ($job.State -eq 'Running') {
+                    $HOST.UI.RawUI.CursorPosition = $pos
+                    Write-Host -NoNewline "  $CYAN$($frames[$fi++ % $frames.Length])$RESET Installing pipx...   "
+                    Start-Sleep -Milliseconds 80
+                }
+            } finally {
+                [Console]::CursorVisible = $true
+                $HOST.UI.RawUI.CursorPosition = $pos
+                Write-Host ("  " + (" " * 30))
+                $HOST.UI.RawUI.CursorPosition = $pos
+            }
+            Receive-Job -Job $job -Wait | Out-Null; Remove-Job -Job $job -Force
+            Success "pipx installed"
         }
     } else {
         Warn "pip not yet available - install pipx later with: pip install --user pipx"
@@ -589,45 +731,48 @@ function Install-Productivity {
         if ($profileContent -notmatch 'starship') {
             if (-not $DryRun) {
                 Add-Content -Path $PROFILE -Value "`n# Starship prompt`nInvoke-Expression (&starship init powershell)"
-                Success "Starship installed and added to PowerShell profile"
             }
-        } else {
-            Success "Starship installed and added to PowerShell profile"
         }
+        Success "Starship installed and added to PowerShell profile"
     }
 
-    # Nerd Fonts - try winget, fall back to choco
-    if ($DryRun) {
-        Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
+    Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
+
+    # bat - winget first, choco fallback
+    if (Has "bat") {
+        Success "bat already installed - skipping"
     } else {
-        $fontInstalled = winget list --id "DEVCOM.JetBrainsMonoNerdFont" --exact 2>$null | Select-String "JetBrainsMono"
-        if (-not $fontInstalled) {
-            Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
-            # If winget ID didn't work, try Chocolatey as fallback
-            $fontCheck = winget list --id "DEVCOM.JetBrainsMonoNerdFont" --exact 2>$null | Select-String "JetBrainsMono"
-            if (-not $fontCheck) {
-                Choco-Install "nerd-fonts-jetbrains-mono" "JetBrains Mono Nerd Font"
-            }
+        Info "Installing bat (better file viewer)..."
+        if ($DryRun) {
+            Write-Host "  $DIM[dry-run] winget install sharkdp.bat$RESET"
         } else {
-            Success "JetBrains Mono Nerd Font already installed - skipping"
+            winget install --id sharkdp.bat --silent --accept-package-agreements --accept-source-agreements 2>$null
+            if ($LASTEXITCODE -ne 0) { Choco-Install "bat" "bat" }
+            else { Refresh-Path; Success "bat installed" }
         }
     }
 
-    # bat (better cat) - use Winget-Install for spinner, choco fallback
-    Winget-Install "sharkdp.bat" "bat (better file viewer)"
-    if (-not $DryRun -and -not (Has "bat")) {
-        Choco-Install "bat" "bat (choco fallback)"
-    }
-
-    # eza (better ls) - use Winget-Install for spinner, choco fallback
-    Winget-Install "eza-community.eza" "eza (better directory listing)"
-    if (-not $DryRun -and -not (Has "eza")) {
-        Choco-Install "eza" "eza (choco fallback)"
+    # eza - winget first, choco fallback
+    if (Has "eza") {
+        Success "eza already installed - skipping"
+    } else {
+        Info "Installing eza (better directory listing)..."
+        if ($DryRun) {
+            Write-Host "  $DIM[dry-run] winget install eza-community.eza$RESET"
+        } else {
+            winget install --id eza-community.eza --silent --accept-package-agreements --accept-source-agreements 2>$null
+            if ($LASTEXITCODE -ne 0) { Choco-Install "eza" "eza" }
+            else { Refresh-Path; Success "eza installed" }
+        }
     }
 
     Winget-Install "junegunn.fzf" "fzf (fuzzy finder)"
     Winget-Install "GitHub.cli" "GitHub CLI"
 
+    Blank
+    Write-Host "  $DIM  GitHub CLI tip: after setup, run these to connect to your account:$RESET"
+    Write-Host "  $DIM    gh auth login        <- sign in to GitHub$RESET"
+    Write-Host "  $DIM    gh auth status       <- confirm you're connected$RESET"
     Blank
 }
 
@@ -655,12 +800,27 @@ function Install-AI {
     if ($geminiCheck) {
         Success "Gemini CLI already installed - skipping"
     } else {
-        Info "Installing Gemini CLI (Google)..."
-        if (-not $DryRun) {
-            npm install -g @google/gemini-cli
-            Success "Gemini CLI installed"
-        } else {
+        if ($DryRun) {
             Write-Host "  $DIM[dry-run] npm install -g @google/gemini-cli$RESET"
+        } else {
+            $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'); $fi = 0
+            [Console]::CursorVisible = $false
+            $job = Start-Job -ScriptBlock { npm install -g @google/gemini-cli 2>&1 }
+            $pos = $HOST.UI.RawUI.CursorPosition
+            try {
+                while ($job.State -eq 'Running') {
+                    $HOST.UI.RawUI.CursorPosition = $pos
+                    Write-Host -NoNewline "  $CYAN$($frames[$fi++ % $frames.Length])$RESET Installing Gemini CLI...   "
+                    Start-Sleep -Milliseconds 80
+                }
+            } finally {
+                [Console]::CursorVisible = $true
+                $HOST.UI.RawUI.CursorPosition = $pos
+                Write-Host ("  " + (" " * 35))
+                $HOST.UI.RawUI.CursorPosition = $pos
+            }
+            Receive-Job -Job $job -Wait | Out-Null; Remove-Job -Job $job -Force
+            Success "Gemini CLI installed"
         }
     }
 
@@ -668,12 +828,27 @@ function Install-AI {
     if ($claudeCheck) {
         Success "Claude Code already installed - skipping"
     } else {
-        Info "Installing Claude Code (Anthropic)..."
-        if (-not $DryRun) {
-            npm install -g @anthropic-ai/claude-code
-            Success "Claude Code installed"
-        } else {
+        if ($DryRun) {
             Write-Host "  $DIM[dry-run] npm install -g @anthropic-ai/claude-code$RESET"
+        } else {
+            $frames = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'); $fi = 0
+            [Console]::CursorVisible = $false
+            $job = Start-Job -ScriptBlock { npm install -g @anthropic-ai/claude-code 2>&1 }
+            $pos = $HOST.UI.RawUI.CursorPosition
+            try {
+                while ($job.State -eq 'Running') {
+                    $HOST.UI.RawUI.CursorPosition = $pos
+                    Write-Host -NoNewline "  $CYAN$($frames[$fi++ % $frames.Length])$RESET Installing Claude Code...   "
+                    Start-Sleep -Milliseconds 80
+                }
+            } finally {
+                [Console]::CursorVisible = $true
+                $HOST.UI.RawUI.CursorPosition = $pos
+                Write-Host ("  " + (" " * 35))
+                $HOST.UI.RawUI.CursorPosition = $pos
+            }
+            Receive-Job -Job $job -Wait | Out-Null; Remove-Job -Job $job -Force
+            Success "Claude Code installed"
         }
     }
 
@@ -792,7 +967,7 @@ function Print-NextSteps {
     Blank
     Write-Host "  $BOLD$GREEN+=========================================================+"
     Write-Host "  |                                                         |"
-    Write-Host "  |   You're all set up! Get started with Developing.       |"
+    Write-Host "  |   You're all set up! Welcome to the dev life.          |"
     Write-Host "  |                                                         |"
     Write-Host "  +=========================================================+$RESET"
     Blank
@@ -804,7 +979,13 @@ function Print-NextSteps {
     if ($InstallEssentials)   { Write-Host "  $CYAN 3.$RESET Find 'Git Bash' in Start menu for unix/bash commands" }
     if ($InstallWeb)          { Write-Host "  $CYAN 4.$RESET Check Node.js: $CYAN node -v$RESET" }
     if ($InstallPython)       { Write-Host "  $CYAN 5.$RESET Check Python: $CYAN python --version$RESET" }
-    if ($InstallProductivity) { Write-Host "  $CYAN 6.$RESET Set terminal font to ${BOLD}JetBrains Mono Nerd Font$RESET for Starship icons" }
+    if ($InstallProductivity) {
+        Write-Host "  $CYAN 6.$RESET Set terminal font to ${BOLD}JetBrains Mono Nerd Font$RESET for Starship icons"
+        Blank
+        Write-Host "  $BOLD  GitHub CLI — finish setup by running:$RESET"
+        Write-Host "  $DIM    gh auth login$RESET    $DIM<- signs you in to GitHub$RESET"
+        Write-Host "  $DIM    gh auth status$RESET   $DIM<- confirm you're connected$RESET"
+    }
 
     if ($InstallLinux) {
         Blank
