@@ -103,8 +103,8 @@ function Refresh-Path {
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
-function Winget-Install($id, $label) {
-    $installed = winget list --id $id --exact 2>$null | Select-String $id
+function Winget-Install($id, $label, $override) {
+    $installed = winget list --id $id --exact 2>$null | Select-String ([regex]::Escape($id))
     if ($installed) {
         Success "$label already installed - skipping"
     } else {
@@ -112,11 +112,32 @@ function Winget-Install($id, $label) {
         if ($DryRun) {
             Write-Host "  $DIM[dry-run] winget install --id $id --silent$RESET"
         } else {
-            winget install --id $id --silent --accept-package-agreements --accept-source-agreements
-            if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {
+            # Build the argument string
+            $argString = "install --id $id --silent --accept-package-agreements --accept-source-agreements"
+            if ($override) { $argString += " --override `"$override`"" }
+
+            # Run winget in a hidden window so we can show a spinner
+            $proc = Start-Process -FilePath "winget" -ArgumentList $argString -PassThru -WindowStyle Hidden
+
+            # Spinner animation while waiting
+            $spinner = @('|', '/', '-', '\')
+            $i = 0
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while (-not $proc.HasExited) {
+                $elapsed = $sw.Elapsed.ToString("mm\:ss")
+                Write-Host -NoNewline "`r    $($spinner[$i % 4]) installing... $DIM($elapsed)$RESET  "
+                $i++
+                Start-Sleep -Milliseconds 400
+            }
+            $sw.Stop()
+            $elapsed = $sw.Elapsed.ToString("mm\:ss")
+            Write-Host "`r    done ($elapsed)                    "
+
+            $exitCode = $proc.ExitCode
+            if ($exitCode -eq 0 -or $exitCode -eq -1978335189) {
                 Success "$label installed"
             } else {
-                Warn "$label may have had issues (exit: $LASTEXITCODE) - check log"
+                Warn "$label may have had issues (exit: $exitCode)"
             }
         }
         Write-Log "WINGET: $id"
@@ -128,7 +149,7 @@ function Choco-Install($pkg, $label) {
         Warn "Chocolatey not available - skipping $label"
         return
     }
-    $installed = choco list --local-only $pkg 2>$null | Select-String "^$pkg "
+    $installed = choco list $pkg 2>$null | Select-String "^$pkg "
     if ($installed) {
         Success "$label already installed - skipping"
     } else {
@@ -389,8 +410,8 @@ function Install-Essentials {
     Blank
 
     # Git installs Git Bash as part of the package
-    Info "Installing Git (includes Git Bash for unix/bash commands)..."
-    Winget-Install "Git.Git" "Git + Git Bash"
+    # Use /VERYSILENT so the InnoSetup installer doesn't open a hidden GUI window
+    Winget-Install "Git.Git" "Git + Git Bash" "/VERYSILENT /NORESTART"
     Refresh-Path
 
     # Git config
@@ -443,12 +464,20 @@ function Install-Web {
     } elseif (Has "nvm") {
         Info "Installing Node.js LTS..."
         if (-not $DryRun) {
-            nvm install lts
-            nvm use lts
+            # nvm-windows requires the actual version number for 'nvm use'
+            $nvmOutput = nvm install lts 2>&1 | Out-String
+            # Parse the version number (e.g. "20.14.0") from nvm output
+            if ($nvmOutput -match '(\d+\.\d+\.\d+)') {
+                $nodeVer = $Matches[1]
+                nvm use $nodeVer
+            } else {
+                # Fallback: try using the latest installed version
+                nvm use newest 2>$null
+            }
             Refresh-Path
             Success "Node.js installed"
         } else {
-            Write-Host "  $DIM[dry-run] nvm install lts && nvm use lts$RESET"
+            Write-Host "  $DIM[dry-run] nvm install lts && nvm use <version>$RESET"
         }
     } else {
         Warn "nvm not yet in PATH - restart PowerShell then run: nvm install lts"
@@ -458,9 +487,12 @@ function Install-Web {
         Success "pnpm already installed - skipping"
     } elseif (Has "npm") {
         Info "Installing pnpm..."
-        if (-not $DryRun) { npm install -g pnpm }
-        else { Write-Host "  $DIM[dry-run] npm install -g pnpm$RESET" }
-        Success "pnpm installed"
+        if (-not $DryRun) {
+            npm install -g pnpm
+            Success "pnpm installed"
+        } else {
+            Write-Host "  $DIM[dry-run] npm install -g pnpm$RESET"
+        }
     } else {
         Warn "npm not yet available - install pnpm later with: npm install -g pnpm"
     }
@@ -481,22 +513,24 @@ function Install-Python {
     if (Has "pyenv") {
         Success "pyenv-win already installed - skipping"
     } else {
-        Winget-Install "PyPA.Pyenv-win" "pyenv-win"
+        Winget-Install "pyenv-win.pyenv-win" "pyenv-win"
 
-        $pyenvPath = "$env:USERPROFILE\.pyenv\pyenv-win"
-        [System.Environment]::SetEnvironmentVariable("PYENV",      $pyenvPath, "User")
-        [System.Environment]::SetEnvironmentVariable("PYENV_ROOT", $pyenvPath, "User")
-        [System.Environment]::SetEnvironmentVariable("PYENV_HOME", $pyenvPath, "User")
+        if (-not $DryRun) {
+            $pyenvPath = "$env:USERPROFILE\.pyenv\pyenv-win"
+            [System.Environment]::SetEnvironmentVariable("PYENV",      $pyenvPath, "User")
+            [System.Environment]::SetEnvironmentVariable("PYENV_ROOT", $pyenvPath, "User")
+            [System.Environment]::SetEnvironmentVariable("PYENV_HOME", $pyenvPath, "User")
 
-        $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-        if ($currentPath -notmatch "pyenv") {
-            [System.Environment]::SetEnvironmentVariable(
-                "Path",
-                "$pyenvPath\bin;$pyenvPath\shims;$currentPath",
-                "User"
-            )
+            $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+            if ($currentPath -notmatch "pyenv") {
+                [System.Environment]::SetEnvironmentVariable(
+                    "Path",
+                    "$pyenvPath\bin;$pyenvPath\shims;$currentPath",
+                    "User"
+                )
+            }
+            Refresh-Path
         }
-        Refresh-Path
     }
 
     $pythonVersion = "3.12.4"
@@ -523,10 +557,10 @@ function Install-Python {
         if (-not $DryRun) {
             pip install --user pipx
             python -m pipx ensurepath
+            Success "pipx installed"
         } else {
             Write-Host "  $DIM[dry-run] pip install --user pipx$RESET"
         }
-        Success "pipx installed"
     } else {
         Warn "pip not yet available - install pipx later with: pip install --user pipx"
     }
@@ -555,39 +589,40 @@ function Install-Productivity {
         if ($profileContent -notmatch 'starship') {
             if (-not $DryRun) {
                 Add-Content -Path $PROFILE -Value "`n# Starship prompt`nInvoke-Expression (&starship init powershell)"
+                Success "Starship installed and added to PowerShell profile"
             }
-        }
-        Success "Starship installed and added to PowerShell profile"
-    }
-
-    Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
-
-    # bat - winget first, choco fallback
-    if (Has "bat") {
-        Success "bat already installed - skipping"
-    } else {
-        Info "Installing bat (better file viewer)..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] winget install sharkdp.bat$RESET"
         } else {
-            winget install --id sharkdp.bat --silent --accept-package-agreements --accept-source-agreements 2>$null
-            if ($LASTEXITCODE -ne 0) { Choco-Install "bat" "bat" }
-            else { Refresh-Path; Success "bat installed" }
+            Success "Starship installed and added to PowerShell profile"
         }
     }
 
-    # eza - winget first, choco fallback
-    if (Has "eza") {
-        Success "eza already installed - skipping"
+    # Nerd Fonts - try winget, fall back to choco
+    if ($DryRun) {
+        Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
     } else {
-        Info "Installing eza (better directory listing)..."
-        if ($DryRun) {
-            Write-Host "  $DIM[dry-run] winget install eza-community.eza$RESET"
+        $fontInstalled = winget list --id "DEVCOM.JetBrainsMonoNerdFont" --exact 2>$null | Select-String "JetBrainsMono"
+        if (-not $fontInstalled) {
+            Winget-Install "DEVCOM.JetBrainsMonoNerdFont" "JetBrains Mono Nerd Font"
+            # If winget ID didn't work, try Chocolatey as fallback
+            $fontCheck = winget list --id "DEVCOM.JetBrainsMonoNerdFont" --exact 2>$null | Select-String "JetBrainsMono"
+            if (-not $fontCheck) {
+                Choco-Install "nerd-fonts-jetbrains-mono" "JetBrains Mono Nerd Font"
+            }
         } else {
-            winget install --id eza-community.eza --silent --accept-package-agreements --accept-source-agreements 2>$null
-            if ($LASTEXITCODE -ne 0) { Choco-Install "eza" "eza" }
-            else { Refresh-Path; Success "eza installed" }
+            Success "JetBrains Mono Nerd Font already installed - skipping"
         }
+    }
+
+    # bat (better cat) - use Winget-Install for spinner, choco fallback
+    Winget-Install "sharkdp.bat" "bat (better file viewer)"
+    if (-not $DryRun -and -not (Has "bat")) {
+        Choco-Install "bat" "bat (choco fallback)"
+    }
+
+    # eza (better ls) - use Winget-Install for spinner, choco fallback
+    Winget-Install "eza-community.eza" "eza (better directory listing)"
+    if (-not $DryRun -and -not (Has "eza")) {
+        Choco-Install "eza" "eza (choco fallback)"
     }
 
     Winget-Install "junegunn.fzf" "fzf (fuzzy finder)"
@@ -621,9 +656,12 @@ function Install-AI {
         Success "Gemini CLI already installed - skipping"
     } else {
         Info "Installing Gemini CLI (Google)..."
-        if (-not $DryRun) { npm install -g @google/gemini-cli }
-        else { Write-Host "  $DIM[dry-run] npm install -g @google/gemini-cli$RESET" }
-        Success "Gemini CLI installed"
+        if (-not $DryRun) {
+            npm install -g @google/gemini-cli
+            Success "Gemini CLI installed"
+        } else {
+            Write-Host "  $DIM[dry-run] npm install -g @google/gemini-cli$RESET"
+        }
     }
 
     $claudeCheck = npm list -g @anthropic-ai/claude-code 2>$null | Select-String "claude-code"
@@ -631,9 +669,12 @@ function Install-AI {
         Success "Claude Code already installed - skipping"
     } else {
         Info "Installing Claude Code (Anthropic)..."
-        if (-not $DryRun) { npm install -g @anthropic-ai/claude-code }
-        else { Write-Host "  $DIM[dry-run] npm install -g @anthropic-ai/claude-code$RESET" }
-        Success "Claude Code installed"
+        if (-not $DryRun) {
+            npm install -g @anthropic-ai/claude-code
+            Success "Claude Code installed"
+        } else {
+            Write-Host "  $DIM[dry-run] npm install -g @anthropic-ai/claude-code$RESET"
+        }
     }
 
     Blank
