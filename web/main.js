@@ -187,13 +187,57 @@ if (isConfigPage) {
   renderCommand()
 }
 
+// ─── TOC HIGHLIGHTING (docs) ───────────────────────────────────────
+const tocLinks = document.querySelectorAll('.toc-link')
+const sections = document.querySelectorAll('.doc-section')
+
+if (tocLinks.length > 0 && sections.length > 0) {
+  const observerOptions = {
+    root: null,
+    rootMargin: '-20% 0px -70% 0px',
+    threshold: 0
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.getAttribute('id')
+        
+        // Update active class
+        tocLinks.forEach(link => {
+          const isActive = link.getAttribute('href') === `#${id}`
+          link.classList.toggle('active', isActive)
+          
+          // Scroll TOC horizontally on mobile to keep active link visible
+          if (isActive && window.innerWidth <= 768) {
+            const toc = link.parentElement
+            const linkRect = link.getBoundingClientRect()
+            const tocRect = toc.getBoundingClientRect()
+            
+            if (linkRect.left < tocRect.left || linkRect.right > tocRect.right) {
+              link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }
+          }
+        })
+      }
+    })
+  }, observerOptions)
+
+  sections.forEach(section => observer.observe(section))
+}
+
 // ─── SMOOTH SCROLL (docs TOC) ─────────────────────────────────────
-document.querySelectorAll('.toc-link').forEach(link => {
+tocLinks.forEach(link => {
   link.addEventListener('click', e => {
     const target = document.querySelector(link.getAttribute('href'))
     if (target) {
       e.preventDefault()
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const navHeight = 48
+      const topOffset = target.getBoundingClientRect().top + window.pageYOffset - navHeight - 16
+      window.scrollTo({ top: topOffset, behavior: 'smooth' })
+      
+      // Update hash without jump
+      history.pushState(null, null, link.getAttribute('href'))
     }
   })
 })
