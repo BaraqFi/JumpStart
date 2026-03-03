@@ -201,4 +201,5 @@ MIT — free to use, fork, and share.
 
 ---
 
-Made with ☕ by [@baraqfi](https://github.com/baraqfi)
+Made with ☕ by [@baraqfi](https://x.com/baraqfi)
+96% of code written by ai, 100% planned and reviewed by me.
